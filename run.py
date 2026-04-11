@@ -49,7 +49,7 @@ def main() -> None:
     stop_event.wait()
 
     # Gracefully shut down all loaded plugins.
-    for name, plugin in list(plugin_manager.plugins.items()):
+    for name, plugin in plugin_manager.get_all_plugins().items():
         shutdown_fn = getattr(plugin, "shutdown", None)
         if shutdown_fn is not None:
             try:

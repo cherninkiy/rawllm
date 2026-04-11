@@ -74,7 +74,7 @@ class PluginManager:
             return {"error": f"Plugin {name!r} timed out after {timeout}s."}
 
         if status == "err":
-            logger.error("Plugin %r raised an exception: %s", name, value)
+            logger.exception("Plugin %r raised an exception", name)
             return {"error": str(value)}
         return value if isinstance(value, dict) else {"result": value}
 
@@ -148,6 +148,11 @@ class PluginManager:
     def get_plugin(self, name: str) -> ModuleType | None:
         """Return the loaded module for *name*, or ``None`` if not found."""
         return self.plugins.get(name)
+
+    def get_all_plugins(self) -> dict[str, ModuleType]:
+        """Return a snapshot copy of the current plugin registry (thread-safe)."""
+        with self._lock:
+            return dict(self.plugins)
 
     # ------------------------------------------------------------------
     # Internal helpers
