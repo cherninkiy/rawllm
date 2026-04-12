@@ -53,7 +53,7 @@ def test_process_request_executes_tool_calls(
     tool_call = {"id": "tc1", "name": "run_plugin", "input": {"name": "echo", "input_data": {"x": 1}}}
 
     mock_llm.chat.side_effect = [
-        {"type": "tool_calls", "tool_calls": [tool_call], "raw": None},
+        {"type": "tool_calls", "tool_calls": [tool_call]},
         {"type": "text", "content": "Done"},
     ]
     mock_executor.run_plugin.return_value = {"result": "ok"}
@@ -63,6 +63,44 @@ def test_process_request_executes_tool_calls(
     assert result == "Done"
     mock_executor.run_plugin.assert_called_once_with(name="echo", input_data={"x": 1})
     assert mock_llm.chat.call_count == 2
+
+
+def test_process_request_tool_call_appends_openai_format_messages(
+    loop: TAORLoop, mock_llm: MagicMock, mock_executor: MagicMock
+) -> None:
+    """After a tool call, the history must use OpenAI-native message format."""
+    tool_call = {"id": "tc1", "name": "run_plugin", "input": {"name": "echo", "input_data": {}}}
+
+    mock_llm.chat.side_effect = [
+        {"type": "tool_calls", "tool_calls": [tool_call]},
+        {"type": "text", "content": "Done"},
+    ]
+    mock_executor.run_plugin.return_value = {"result": "ok"}
+
+    loop.process_request("Run echo plugin")
+
+    # The second call receives the updated history.
+    second_call_kwargs = mock_llm.chat.call_args_list[1]
+    messages = second_call_kwargs[1].get("messages") or second_call_kwargs[0][0]
+
+    # messages[0] = original user turn
+    assert messages[0]["role"] == "user"
+
+    # messages[1] = assistant turn with tool_calls list (OpenAI format)
+    asst = messages[1]
+    assert asst["role"] == "assistant"
+    assert asst["content"] is None
+    assert len(asst["tool_calls"]) == 1
+    tc = asst["tool_calls"][0]
+    assert tc["id"] == "tc1"
+    assert tc["type"] == "function"
+    assert tc["function"]["name"] == "run_plugin"
+
+    # messages[2] = tool result (role: tool)
+    tool_result = messages[2]
+    assert tool_result["role"] == "tool"
+    assert tool_result["tool_call_id"] == "tc1"
+    assert json.loads(tool_result["content"]) == {"result": "ok"}
 
 
 def test_process_request_dispatches_add_plugin(
@@ -75,7 +113,7 @@ def test_process_request_dispatches_add_plugin(
     }
 
     mock_llm.chat.side_effect = [
-        {"type": "tool_calls", "tool_calls": [tool_call], "raw": None},
+        {"type": "tool_calls", "tool_calls": [tool_call]},
         {"type": "text", "content": "Plugin added"},
     ]
     mock_executor.add_plugin.return_value = {"status": "ok"}
@@ -91,7 +129,7 @@ def test_process_request_dispatches_unload_plugin(
     tool_call = {"id": "tc3", "name": "unload_plugin", "input": {"name": "old"}}
 
     mock_llm.chat.side_effect = [
-        {"type": "tool_calls", "tool_calls": [tool_call], "raw": None},
+        {"type": "tool_calls", "tool_calls": [tool_call]},
         {"type": "text", "content": "Unloaded"},
     ]
     mock_executor.unload_plugin.return_value = {"status": "ok"}
@@ -107,7 +145,7 @@ def test_process_request_unknown_tool_returns_error(
     tool_call = {"id": "tc4", "name": "fly_to_moon", "input": {}}
 
     mock_llm.chat.side_effect = [
-        {"type": "tool_calls", "tool_calls": [tool_call], "raw": None},
+        {"type": "tool_calls", "tool_calls": [tool_call]},
         {"type": "text", "content": "Cannot do that"},
     ]
 
@@ -120,9 +158,10 @@ def test_process_request_max_iterations(
     loop: TAORLoop, mock_llm: MagicMock, mock_executor: MagicMock
 ) -> None:
     tool_call = {"id": "tc5", "name": "run_plugin", "input": {"name": "loop", "input_data": {}}}
-    mock_llm.chat.return_value = {"type": "tool_calls", "tool_calls": [tool_call], "raw": None}
+    mock_llm.chat.return_value = {"type": "tool_calls", "tool_calls": [tool_call]}
     mock_executor.run_plugin.return_value = {"result": "still running"}
 
     result = loop.process_request("Run forever")
     assert "maximum iterations" in result
     assert mock_llm.chat.call_count == 5  # max_iterations=5
+

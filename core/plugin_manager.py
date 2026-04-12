@@ -9,7 +9,6 @@ Enhancements over the original:
 - Full traceback returned on error (both in-process and subprocess paths).
 """
 
-import ast
 import importlib
 import importlib.util
 import json
@@ -27,6 +26,7 @@ from typing import Any
 
 import core.metrics as metrics
 from core.config import ALLOWED_REQUIREMENTS, SANDBOX_TIMEOUT, TRUSTED_PLUGINS
+from core.utils import extract_imports
 
 logger = logging.getLogger(__name__)
 
@@ -37,26 +37,9 @@ PROTECTED_PLUGINS = {"http"}
 # ---------------------------------------------------------------------------
 
 
-def _extract_imports(code: str) -> list[str]:
-    """Return a list of top-level module names imported by *code*."""
-    try:
-        tree = ast.parse(code)
-    except SyntaxError:
-        return []
-    names: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                names.append(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                names.append(node.module.split(".")[0])
-    return names
-
-
 def _import_risk_score(code: str) -> int:
     """Count of imports that are outside ALLOWED_REQUIREMENTS."""
-    imports = _extract_imports(code)
+    imports = extract_imports(code)
     return sum(1 for imp in imports if imp not in ALLOWED_REQUIREMENTS)
 
 

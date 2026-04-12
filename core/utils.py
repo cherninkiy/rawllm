@@ -1,5 +1,6 @@
 """Utility helpers for the orchestrator."""
 
+import ast
 import logging
 import os
 from pathlib import Path
@@ -53,3 +54,24 @@ def configure_logging(level: int = logging.INFO) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s – %(message)s",
         datefmt="%H:%M:%S",
     )
+
+
+def extract_imports(code: str) -> list[str]:
+    """Return a list of top-level module names imported by *code*.
+
+    Uses AST parsing so only syntactically valid code produces results.
+    Returns an empty list if parsing fails.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.append(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                names.append(node.module.split(".")[0])
+    return names

@@ -6,7 +6,8 @@ from typing import Any
 
 import core.metrics as metrics
 from core.config import ALLOWED_REQUIREMENTS
-from core.plugin_manager import PluginManager, _extract_imports
+from core.plugin_manager import PluginManager
+from core.utils import extract_imports
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class ToolExecutor:
         """
         logger.info("Tool: add_plugin(%r)", name)
 
-        imports = _extract_imports(code)
+        imports = extract_imports(code)
         blocked = [imp for imp in imports if imp not in ALLOWED_REQUIREMENTS]
         if blocked:
             pending = sorted(set(blocked))
