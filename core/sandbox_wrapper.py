@@ -1,13 +1,24 @@
 """Subprocess sandbox: reads JSON from stdin, executes plugin.run(), writes JSON to stdout.
 
+Bytecode caching is intentionally disabled (``sys.dont_write_bytecode = True``)
+so that every subprocess invocation always compiles the source file from scratch.
+This prevents stale ``.pyc`` files from being loaded when a plugin is updated
+within the same filesystem-timestamp second.
+
 Usage (internal):
     echo '{"plugin_path": "/path/to/plugin.py", "input_data": {...}}' | python -m core.sandbox_wrapper
 """
 
-import importlib.util
-import json
+# ⚠️  Must be set before any user import so Python never writes .pyc files
+# inside this subprocess.  This eliminates stale-bytecode bugs when a plugin
+# source file is updated faster than the OS filesystem mtime resolution.
 import sys
-import traceback
+sys.dont_write_bytecode = True
+
+import importlib.util  # noqa: E402
+import json            # noqa: E402
+import traceback       # noqa: E402
+import uuid            # noqa: E402
 
 
 def main() -> None:
@@ -16,7 +27,11 @@ def main() -> None:
         plugin_path: str = payload["plugin_path"]
         input_data: dict = payload["input_data"]
 
-        spec = importlib.util.spec_from_file_location("_sandbox_plugin", plugin_path)
+        # Use a unique module name per invocation to prevent any accidental
+        # collision with previously cached module objects in sys.modules.
+        module_name = f"_sandbox_plugin_{uuid.uuid4().hex}"
+
+        spec = importlib.util.spec_from_file_location(module_name, plugin_path)
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot create module spec for {plugin_path}")
 

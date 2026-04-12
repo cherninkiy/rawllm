@@ -30,7 +30,7 @@ import json
 import logging
 from typing import Any
 
-from core.llm_protocol import LLMClientProtocol
+from core.llm.protocol import LLMClientProtocol
 from core.tool_executor import ToolExecutor
 
 logger = logging.getLogger(__name__)

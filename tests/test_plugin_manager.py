@@ -106,6 +106,8 @@ def test_add_plugin_writes_and_loads(manager: PluginManager, plugins_dir: Path) 
 
 
 def test_add_plugin_overwrites_existing(manager: PluginManager, plugins_dir: Path) -> None:
+    from unittest.mock import patch
+
     manager.add_plugin("overwrite", DUMMY_PLUGIN_CODE)
     new_code = textwrap.dedent(
         """\
@@ -114,8 +116,25 @@ def test_add_plugin_overwrites_existing(manager: PluginManager, plugins_dir: Pat
         """
     )
     manager.add_plugin("overwrite", new_code)
-    result = manager.call_plugin("overwrite", {})
+    with patch("core.plugin_manager.TRUSTED_PLUGINS", ["overwrite"]):
+        result = manager.call_plugin("overwrite", {})
     assert result == {"version": 2}
+
+
+def test_add_plugin_archives_previous_version(manager: PluginManager, plugins_dir: Path) -> None:
+    """Overwriting a plugin should create an archive entry."""
+    manager.add_plugin("versioned_plugin", DUMMY_PLUGIN_CODE)
+    new_code = textwrap.dedent(
+        """\
+        def run(input_data):
+            return {"version": 2}
+        """
+    )
+    manager.add_plugin("versioned_plugin", new_code)
+    arch_dir = plugins_dir.parent / "plugins_store" / "archive" / "versioned_plugin"
+    assert arch_dir.exists()
+    archived = list(arch_dir.glob("v*.py"))
+    assert len(archived) >= 1
 
 
 def test_reload_plugin(manager: PluginManager, plugins_dir: Path) -> None:
@@ -137,6 +156,11 @@ def test_reload_plugin(manager: PluginManager, plugins_dir: Path) -> None:
     assert manager.call_plugin("reloadable", {}) == {"reloaded": True}
 
 
+def test_reload_plugin_nonexistent_file_returns_error(manager: PluginManager) -> None:
+    result = manager.reload_plugin("not_on_disk")
+    assert "error" in result
+
+
 def test_unload_plugin_calls_shutdown(manager: PluginManager, plugins_dir: Path) -> None:
     (plugins_dir / "shutdownable.py").write_text(DUMMY_PLUGIN_WITH_SHUTDOWN)
     manager.load_plugins()
@@ -151,8 +175,23 @@ def test_unload_http_is_forbidden(manager: PluginManager) -> None:
     assert "protected" in result["error"]
 
 
+def test_unload_plugin_not_loaded_returns_error(manager: PluginManager) -> None:
+    result = manager.unload_plugin("not_loaded_plugin")
+    assert "error" in result
+
+
 def test_get_plugin_returns_none_for_unknown(manager: PluginManager) -> None:
     assert manager.get_plugin("does_not_exist") is None
+
+
+def test_get_all_plugins_returns_snapshot(manager: PluginManager, plugins_dir: Path) -> None:
+    (plugins_dir / "snap.py").write_text(DUMMY_PLUGIN_CODE)
+    manager.load_plugins()
+    snapshot = manager.get_all_plugins()
+    assert "snap" in snapshot
+    # Mutating snapshot should not affect registry
+    del snapshot["snap"]
+    assert "snap" in manager.plugins
 
 
 def test_init_is_called_on_load(manager: PluginManager, plugins_dir: Path) -> None:
@@ -175,6 +214,24 @@ def test_call_plugin_non_dict_return_is_wrapped(manager: PluginManager, plugins_
     manager.load_plugins()
     result = manager.call_plugin("scalar", {})
     assert result == {"result": 42}
+
+
+def test_call_plugin_raises_exception_returns_error_with_traceback(
+    manager: PluginManager, plugins_dir: Path
+) -> None:
+    """Plugins that raise exceptions should return an error dict with traceback."""
+    code = textwrap.dedent(
+        """\
+        def run(input_data):
+            raise ValueError("oops")
+        """
+    )
+    (plugins_dir / "faulty.py").write_text(code)
+    manager.load_plugins()
+    result = manager.call_plugin("faulty", {})
+    assert "error" in result
+    assert "traceback" in result
+    assert "ValueError" in result["traceback"]
 
 
 def test_reload_plugin_calls_shutdown_on_old_version(manager: PluginManager, plugins_dir: Path) -> None:
@@ -210,6 +267,47 @@ def test_reload_plugin_calls_shutdown_on_old_version(manager: PluginManager, plu
 
     assert len(shutdown_calls) == 1, "shutdown() should have been called exactly once during reload"
     assert manager.call_plugin("versioned", {}) == {"version": 2}
+
+
+def test_rollback_plugin_no_archive_returns_error(manager: PluginManager) -> None:
+    result = manager.rollback_plugin("no_such_plugin")
+    assert "error" in result
+
+
+def test_rollback_plugin_restores_previous_version(manager: PluginManager, plugins_dir: Path) -> None:
+    """After adding two versions, rollback should restore the archived (v1) code."""
+    from unittest.mock import patch as mpatch
+
+    v1_code = textwrap.dedent(
+        """\
+        def run(input_data):
+            return {"version": 1}
+        """
+    )
+    v2_code = textwrap.dedent(
+        """\
+        def run(input_data):
+            return {"version": 2}
+        """
+    )
+    manager.add_plugin("rollme", v1_code)
+    manager.add_plugin("rollme", v2_code)
+
+    # Use in-process (trusted) execution to bypass subprocess .pyc caching.
+    with mpatch("core.plugin_manager.TRUSTED_PLUGINS", ["rollme"]):
+        assert manager.call_plugin("rollme", {}) == {"version": 2}
+
+        result = manager.rollback_plugin("rollme")
+        assert result.get("status") == "ok"
+        assert manager.call_plugin("rollme", {}) == {"version": 1}
+
+
+def test_rollback_plugin_empty_archive_returns_error(manager: PluginManager, plugins_dir: Path) -> None:
+    """Archive directory exists but has no versioned .py files."""
+    arch_dir = plugins_dir.parent / "plugins_store" / "archive" / "myplug"
+    arch_dir.mkdir(parents=True)
+    result = manager.rollback_plugin("myplug")
+    assert "error" in result
 
 
 def teardown_module(module: object) -> None:

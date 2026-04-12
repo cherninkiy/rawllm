@@ -1,3 +1,21 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 timeout = 30
+
+[tool.coverage.run]
+source = ["core"]
+omit = [
+    # backward-compat shims – covered by integration imports
+    "core/llm_client.py",
+    "core/llm_client_openai.py",
+    "core/llm_protocol.py",
+    # sandbox_wrapper runs as a subprocess; covered by test_sandbox_wrapper.py
+    "core/sandbox_wrapper.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]
+show_missing = true

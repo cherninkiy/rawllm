@@ -13,6 +13,7 @@ import importlib
 import importlib.util
 import json
 import logging
+import os
 import queue
 import subprocess
 import sys
@@ -31,6 +32,27 @@ from core.utils import extract_imports
 logger = logging.getLogger(__name__)
 
 PROTECTED_PLUGINS = {"http"}
+
+
+def _touch_future(path: Path) -> None:
+    """Invalidate Python's .pyc cache for *path* and set mtime into the future.
+
+    Python caches compiled bytecode using (mtime, size) of the source file.  If a
+    plugin file is rewritten within the same second the OS-level mtime doesn't
+    change, so Python re-uses the stale .pyc.  This helper deletes the .pyc and
+    sets the source mtime one second ahead to guarantee recompilation.
+    """
+    import importlib.util as _iu
+    # Delete the existing .pyc to force recompilation.
+    try:
+        pyc_path = _iu.cache_from_source(str(path))
+        Path(pyc_path).unlink(missing_ok=True)
+    except (NotImplementedError, ValueError, OSError):
+        pass
+    importlib.invalidate_caches()
+    # Also advance the mtime to ensure any remaining cached mtime is stale.
+    future = time.time() + 1
+    os.utime(path, (future, future))
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -211,6 +233,8 @@ class PluginManager:
                 _update_current_symlink(self.plugins_dir, name, path)
 
             path.write_text(code, encoding="utf-8")
+            # Ensure mtime differs from any cached .pyc so Python recompiles on import.
+            _touch_future(path)
             result = self.reload_plugin(name)
             if "status" in result:
                 _update_current_symlink(self.plugins_dir, name, path)
@@ -287,10 +311,10 @@ class PluginManager:
         from_ver = self._current_version_str(name)
 
         # Copy archived file back to active location.
-        self.plugins_dir.joinpath(f"{name}.py").write_text(
-            prev_path.read_text(encoding="utf-8"), encoding="utf-8"
-        )
-        _update_current_symlink(self.plugins_dir, name, self.plugins_dir / f"{name}.py")
+        active_path = self.plugins_dir.joinpath(f"{name}.py")
+        active_path.write_text(prev_path.read_text(encoding="utf-8"), encoding="utf-8")
+        _touch_future(active_path)
+        _update_current_symlink(self.plugins_dir, name, active_path)
 
         meta["rollback_count"] = meta.get("rollback_count", 0) + 1
         _write_version_meta(self.plugins_dir, name, meta)
