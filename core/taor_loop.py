@@ -19,13 +19,20 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Write a Python plugin to disk and hot-reload it. "
             "The code must define `run(input_data: dict) -> dict`. "
-            "Optionally it may define `init(callback)` and `shutdown()`."
+            "Optionally it may define `init(callback)` and `shutdown()`. "
+            "If the plugin imports modules outside the default allow-list, list them in "
+            "proposed_requirements; the orchestrator will gate execution until approved."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Plugin name (no .py extension)."},
                 "code": {"type": "string", "description": "Full Python source code of the plugin."},
+                "proposed_requirements": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of third-party modules the plugin needs.",
+                },
             },
             "required": ["name", "code"],
         },
