@@ -15,21 +15,21 @@ from core.utils import (
 )
 
 
-def test_extract_imports_simple(tmp_path: Path) -> None:
+def test_extract_imports_simple() -> None:
     code = "import os\nimport sys\n\ndef run(d): return {}\n"
     result = extract_imports(code)
     assert "os" in result
     assert "sys" in result
 
 
-def test_extract_imports_from_style(tmp_path: Path) -> None:
+def test_extract_imports_from_style() -> None:
     code = "from pathlib import Path\nfrom collections import defaultdict\n\ndef run(d): return {}\n"
     result = extract_imports(code)
     assert "pathlib" in result
     assert "collections" in result
 
 
-def test_extract_imports_dotted(tmp_path: Path) -> None:
+def test_extract_imports_dotted() -> None:
     code = "import os.path\n\ndef run(d): return {}\n"
     result = extract_imports(code)
     assert "os" in result

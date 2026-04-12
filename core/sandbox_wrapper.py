@@ -29,6 +29,9 @@ def main() -> None:
 
         # Use a unique module name per invocation to prevent any accidental
         # collision with previously cached module objects in sys.modules.
+        # uuid4 guarantees global uniqueness; the 32-char hex suffix is
+        # ephemeral (never registered in sys.modules after the process exits),
+        # so there is no long-term pollution concern.
         module_name = f"_sandbox_plugin_{uuid.uuid4().hex}"
 
         spec = importlib.util.spec_from_file_location(module_name, plugin_path)

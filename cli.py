@@ -305,7 +305,10 @@ def _print_result(result: dict[str, Any]) -> None:
 
 
 def _print_table(headers: list[str], rows: list[list[str]]) -> None:
-    widths = [max(len(h), *(len(r[i]) for r in rows), 0) for i, h in enumerate(headers)]
+    if not rows:
+        click.echo("  ".join(headers))
+        return
+    widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
     sep = "  "
     header_line = sep.join(h.ljust(w) for h, w in zip(headers, widths))
     click.echo(header_line)
@@ -335,7 +338,7 @@ def _remove_from_pending(module: str) -> None:
     if not PENDING_FILE.exists():
         return
     lines = PENDING_FILE.read_text(encoding="utf-8").splitlines()
-    remaining = [l for l in lines if l.strip() != module]
+    remaining = [line for line in lines if line.strip() != module]
     PENDING_FILE.write_text("\n".join(remaining) + ("\n" if remaining else ""), encoding="utf-8")
 
 

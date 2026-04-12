@@ -41,6 +41,11 @@ def _touch_future(path: Path) -> None:
     plugin file is rewritten within the same second the OS-level mtime doesn't
     change, so Python re-uses the stale .pyc.  This helper deletes the .pyc and
     sets the source mtime one second ahead to guarantee recompilation.
+
+    The +1 s offset assumes the system clock is not adjusted backwards during an
+    orchestrator session (a safe assumption for a POC).  Increase the offset or
+    switch to a hash-based invalidation scheme if sub-second forward-clock-skew
+    ever becomes a concern.
     """
     import importlib.util as _iu
     # Delete the existing .pyc to force recompilation.
