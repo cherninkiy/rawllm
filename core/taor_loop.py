@@ -1,59 +1,101 @@
-"""TAOR loop: Think → Act → Observe → Repeat."""
+"""TAOR loop: Think → Act → Observe → Repeat.
+
+Internal message format
+-----------------------
+All messages in the history are **OpenAI-compatible**.  The LLM adapter
+(Anthropic or OpenAI) is responsible for translating to/from its native wire
+format; TAORLoop itself is provider-agnostic.
+
+Tool call assistant turn appended to history::
+
+    {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": <str>,
+                "type": "function",
+                "function": {"name": <str>, "arguments": <json-str>},
+            },
+            …
+        ],
+    }
+
+Tool result turns (one per tool call)::
+
+    {"role": "tool", "tool_call_id": <str>, "content": <json-str>}
+"""
 
 import json
 import logging
 from typing import Any
 
-from core.llm_client import LLMClient
+from core.llm.protocol import LLMClientProtocol
 from core.tool_executor import ToolExecutor
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Anthropic tool definitions (schema passed to the LLM on every request)
+# Tool definitions – OpenAI function-calling schema
 # ---------------------------------------------------------------------------
 
 TOOLS: list[dict[str, Any]] = [
     {
-        "name": "add_plugin",
-        "description": (
-            "Write a Python plugin to disk and hot-reload it. "
-            "The code must define `run(input_data: dict) -> dict`. "
-            "Optionally it may define `init(callback)` and `shutdown()`."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {"type": "string", "description": "Plugin name (no .py extension)."},
-                "code": {"type": "string", "description": "Full Python source code of the plugin."},
-            },
-            "required": ["name", "code"],
-        },
-    },
-    {
-        "name": "run_plugin",
-        "description": "Execute a loaded plugin by name and return its result.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {"type": "string", "description": "Plugin name."},
-                "input_data": {
-                    "type": "object",
-                    "description": "Arbitrary JSON-serialisable dict passed to the plugin's run().",
+        "type": "function",
+        "function": {
+            "name": "add_plugin",
+            "description": (
+                "Write a Python plugin to disk and hot-reload it. "
+                "The code must define `run(input_data: dict) -> dict`. "
+                "Optionally it may define `init(callback)` and `shutdown()`. "
+                "If the plugin imports modules outside the default allow-list, list them in "
+                "proposed_requirements; the orchestrator will gate execution until approved."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Plugin name (no .py extension)."},
+                    "code": {"type": "string", "description": "Full Python source code of the plugin."},
+                    "proposed_requirements": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of third-party modules the plugin needs.",
+                    },
                 },
+                "required": ["name", "code"],
             },
-            "required": ["name", "input_data"],
         },
     },
     {
-        "name": "unload_plugin",
-        "description": "Gracefully shut down and remove a plugin. Cannot unload 'http'.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {"type": "string", "description": "Plugin name to unload."},
+        "type": "function",
+        "function": {
+            "name": "run_plugin",
+            "description": "Execute a loaded plugin by name and return its result.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Plugin name."},
+                    "input_data": {
+                        "type": "object",
+                        "description": "Arbitrary JSON-serialisable dict passed to the plugin's run().",
+                    },
+                },
+                "required": ["name", "input_data"],
             },
-            "required": ["name"],
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "unload_plugin",
+            "description": "Gracefully shut down and remove a plugin. Cannot unload 'http'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Plugin name to unload."},
+                },
+                "required": ["name"],
+            },
         },
     },
 ]
@@ -64,7 +106,7 @@ class TAORLoop:
 
     def __init__(
         self,
-        llm_client: LLMClient,
+        llm_client: LLMClientProtocol,
         tool_executor: ToolExecutor,
         system_prompt: str,
         max_iterations: int = 10,
@@ -72,7 +114,7 @@ class TAORLoop:
         """Initialise the loop.
 
         Args:
-            llm_client: The LLM wrapper used to send messages.
+            llm_client: Any object satisfying :class:`~core.llm.protocol.LLMClientProtocol`.
             tool_executor: Executes tool calls returned by the LLM.
             system_prompt: System prompt injected on every request.
             max_iterations: Hard limit on LLM↔tool turns per request.
@@ -116,27 +158,36 @@ class TAORLoop:
 
             # tool_calls branch
             tool_calls = response["tool_calls"]
-            raw_response = response.get("raw")
 
-            # Append the assistant's tool-use turn
-            if raw_response is not None:
-                messages.append({"role": "assistant", "content": raw_response.content})
-            else:
-                messages.append({"role": "assistant", "content": tool_calls})
+            # Append the assistant's tool-call turn in OpenAI format.
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": json.dumps(tc["input"], ensure_ascii=False),
+                            },
+                        }
+                        for tc in tool_calls
+                    ],
+                }
+            )
 
-            # Execute each tool and collect results
-            tool_results = []
+            # Execute each tool and append individual tool-result messages.
             for call in tool_calls:
                 result = self._dispatch(call["name"], call["input"])
-                tool_results.append(
+                messages.append(
                     {
-                        "type": "tool_result",
-                        "tool_use_id": call["id"],
+                        "role": "tool",
+                        "tool_call_id": call["id"],
                         "content": json.dumps(result, ensure_ascii=False),
                     }
                 )
-
-            messages.append({"role": "user", "content": tool_results})
 
         return (
             f"Reached maximum iterations ({self._max_iterations}) without a final answer. "

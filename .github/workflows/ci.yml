@@ -33,7 +33,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run pytest
-        run: pytest tests/ -v --timeout=30
+        run: pytest tests/ -v --timeout=30 --cov=core --cov-fail-under=90
 
       - name: Run flake8
         run: flake8 core/ plugins/ run.py --max-line-length=120 --ignore=E501,W503

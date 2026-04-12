@@ -80,7 +80,7 @@ def test_get_request_returns_html() -> None:
     response = urllib.request.urlopen(f"http://127.0.0.1:{TEST_PORT}/")
     assert response.status == 200
     body = response.read().decode()
-    assert "Dumb Orchestrator" in body
+    assert "RawLLM" in body
 
 
 def test_post_request_calls_callback() -> None:
