@@ -47,14 +47,15 @@ curl -X POST http://localhost:8080/ \
 
 ## Running with Free / Lightweight LLMs
 
-`run_light.py` supports any OpenAI-compatible provider via the `LLM_PROVIDER`
-environment variable.  All Part-A security and versioning enhancements are
-automatically active.
+`run.py` supports any OpenAI-compatible provider via the `LLM_PROVIDER`
+environment variable (default: `anthropic`).  All Part-A security and versioning
+enhancements are automatically active.
 
 ### Supported providers
 
 | `LLM_PROVIDER` | API key env var | Default model |
 |---|---|---|
+| `anthropic` *(default)* | `ANTHROPIC_API_KEY` | `claude-3-5-sonnet-20241022` |
 | `groq` | `GROQ_API_KEY` | `llama3-70b-8192` |
 | `gemini` | `GEMINI_API_KEY` | `gemini-2.0-flash` |
 | `openrouter` | `OPENROUTER_API_KEY` | `mistralai/mistral-7b-instruct:free` |
@@ -65,21 +66,21 @@ Override any default with `LLM_MODEL` and `LLM_BASE_URL`.
 ### Groq (free tier)
 ```bash
 echo "GROQ_API_KEY=gsk_..." >> .env
-LLM_PROVIDER=groq python run_light.py
+LLM_PROVIDER=groq python run.py
 ```
 
 ### Google Gemini
 ```bash
 echo "GEMINI_API_KEY=AIza..." >> .env
-LLM_PROVIDER=gemini python run_light.py
+LLM_PROVIDER=gemini python run.py
 ```
 
 ### OpenRouter (free models)
 ```bash
 echo "OPENROUTER_API_KEY=sk-or-..." >> .env
-LLM_PROVIDER=openrouter python run_light.py
+LLM_PROVIDER=openrouter python run.py
 # Use a specific free model:
-LLM_PROVIDER=openrouter LLM_MODEL=google/gemma-3-27b-it:free python run_light.py
+LLM_PROVIDER=openrouter LLM_MODEL=google/gemma-3-27b-it:free python run.py
 ```
 
 ### Ollama (fully local, no API key)
@@ -88,9 +89,9 @@ LLM_PROVIDER=openrouter LLM_MODEL=google/gemma-3-27b-it:free python run_light.py
 ollama pull llama3.2:3b   # or any model you prefer
 
 # 2. Run
-LLM_PROVIDER=ollama python run_light.py
+LLM_PROVIDER=ollama python run.py
 # Custom model:
-LLM_PROVIDER=ollama LLM_MODEL=mistral python run_light.py
+LLM_PROVIDER=ollama LLM_MODEL=mistral python run.py
 ```
 
 ## ⚠️ Предупреждение о безопасности
@@ -111,22 +112,22 @@ LLM_PROVIDER=ollama LLM_MODEL=mistral python run_light.py
 dumb-orchestrator-poc/
 ├── core/
 │   ├── plugin_manager.py   # Загрузка/горячая замена плагинов, версионирование, sandbox
-│   ├── llm_client.py       # Обёртка Anthropic API с tool use
-│   ├── llm_client_openai.py# Обёртка OpenAI-совместимых API (Groq, Gemini, Ollama, …)
+│   ├── llm_protocol.py     # LLMClientProtocol — общий интерфейс для адаптеров LLM
+│   ├── llm_client.py       # Адаптер Anthropic (реализует протокол)
+│   ├── llm_client_openai.py# Адаптер OpenAI-совместимых API (Groq, Gemini, Ollama, …)
 │   ├── tool_executor.py    # Маршрутизация вызовов инструментов + проверка зависимостей
 │   ├── taor_loop.py        # Цикл Think→Act→Observe→Repeat
-│   ├── config.py           # Настройки: trusted_plugins, allowed_requirements
+│   ├── config.py           # Настройки: trusted_plugins, allowed_requirements, llm_providers
 │   ├── metrics.py          # Логирование событий в metrics.jsonl
 │   ├── sandbox_wrapper.py  # Обёртка для изолированного запуска плагинов в subprocess
-│   └── utils.py            # Вспомогательные утилиты
+│   └── utils.py            # Вспомогательные утилиты + extract_imports
 ├── plugins/
 │   └── http.py             # HTTP-транспорт (порт задаётся через HTTP_PORT)
 ├── plugins_store/          # Версионированное хранилище плагинов (создаётся автоматически)
 │   ├── current/            # Символические ссылки на активные версии
 │   └── archive/{name}/     # Архив предыдущих версий с метриками
 ├── system_prompt.txt       # Системный промпт для LLM
-├── run.py                  # Точка входа (Anthropic / Claude)
-└── run_light.py            # Точка входа для лёгких LLM (Groq, Gemini, Ollama, …)
+└── run.py                  # Единая точка входа (Anthropic / Groq / Gemini / Ollama / …)
 ```
 
 ## Лицензия
