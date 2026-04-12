@@ -1,4 +1,4 @@
-"""Entry point for the Dumb Orchestrator.
+"""Entry point for RawLLM.
 
 Selects the LLM backend via the ``LLM_PROVIDER`` environment variable
 (default: ``anthropic``).  All security features (sandboxing, versioning,
@@ -73,7 +73,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    print("Dumb Orchestrator is running. Press Ctrl+C to stop.")
+    print("RawLLM is running. Press Ctrl+C to stop.")
     stop_event.wait()
 
     # Gracefully shut down all loaded plugins.

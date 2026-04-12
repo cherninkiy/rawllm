@@ -1,4 +1,4 @@
-"""Core package for the Dumb Orchestrator – Smart Model POC."""
+"""Core package for RawLLM – minimal orchestrator that exposes the raw power of LLMs."""
 
 from core.llm.clients.anthropic import AnthropicClient
 from core.plugin_manager import PluginManager

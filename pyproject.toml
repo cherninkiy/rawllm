@@ -2,6 +2,15 @@
 pythonpath = ["."]
 timeout = 30
 
+[project]
+name = "rawllm"
+version = "0.1.0"
+description = "RawLLM – minimal orchestrator that exposes the raw power of LLMs"
+requires-python = ">=3.10"
+
+[project.scripts]
+rawllm = "cli:cli"
+
 [tool.coverage.run]
 source = ["core"]
 omit = [

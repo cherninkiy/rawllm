@@ -44,7 +44,7 @@ class _Handler(BaseHTTPRequestHandler):
         """Return a simple HTML status page."""
         body = (
             b"<html><body>"
-            b"<h1>Dumb Orchestrator - HTTP Plugin</h1>"
+            b"<h1>RawLLM - HTTP Plugin</h1>"
             b"<p>POST / with JSON <code>{\"prompt\": \"...\", \"context\": {}}</code></p>"
             b"</body></html>"
         )

@@ -1,4 +1,4 @@
-You are an autonomous AI agent operating inside the "Dumb Orchestrator – Smart Model" framework.
+You are an autonomous AI agent operating inside the **RawLLM** framework.
 
 ## Your capabilities
 

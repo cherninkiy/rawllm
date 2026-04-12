@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Command-line interface for the Dumb Orchestrator POC.
+"""Command-line interface for RawLLM.
 
 Install (editable):
     pip install -e .
@@ -12,23 +12,23 @@ Examples
 ::
 
     # Start the orchestrator
-    dumb-orch run --provider anthropic
+    rawllm run --provider anthropic
 
     # Plugin management
-    dumb-orch plugin list
-    dumb-orch plugin show my_plugin
-    dumb-orch plugin rollback my_plugin
+    rawllm plugin list
+    rawllm plugin show my_plugin
+    rawllm plugin rollback my_plugin
 
     # Dependency approval workflow
-    dumb-orch deps pending
-    dumb-orch deps approve requests
+    rawllm deps pending
+    rawllm deps approve requests
 
     # Metrics & analytics
-    dumb-orch metrics show --plugin my_plugin --format table
-    dumb-orch metrics evolution my_plugin
+    rawllm metrics show --plugin my_plugin --format table
+    rawllm metrics evolution my_plugin
 
     # Configuration
-    dumb-orch config show
+    rawllm config show
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ ENV_FILE = Path(".env")
 
 @click.group()
 def cli() -> None:
-    """Dumb Orchestrator – command-line management tool."""
+    """RawLLM – command-line management tool."""
 
 
 # ---------------------------------------------------------------------------

@@ -94,7 +94,57 @@ LLM_PROVIDER=ollama python run.py
 LLM_PROVIDER=ollama LLM_MODEL=mistral python run.py
 ```
 
-## ⚠️ Предупреждение о безопасности
+## CLI (`rawllm`)
+
+Install the package in editable mode to get the `rawllm` command:
+
+```bash
+pip install -e .
+```
+
+Or invoke directly without installing:
+
+```bash
+python cli.py <command>
+```
+
+### Orchestrator lifecycle
+```bash
+rawllm run                        # use default provider (anthropic)
+rawllm run --provider groq        # use a specific provider
+```
+
+### Plugin management
+```bash
+rawllm plugin list
+rawllm plugin show my_plugin
+rawllm plugin add my_plugin path/to/code.py
+rawllm plugin rollback my_plugin
+```
+
+### Dependency approval
+```bash
+rawllm deps pending               # list modules awaiting approval
+rawllm deps approve requests      # approve a module
+rawllm deps reject requests       # reject a module
+```
+
+### Metrics & analytics
+```bash
+rawllm metrics show                          # all plugins, table format
+rawllm metrics show --plugin my_plugin       # one plugin
+rawllm metrics show --format json            # JSON output
+rawllm metrics evolution my_plugin           # chronological timeline
+```
+
+### Configuration
+```bash
+rawllm config show
+rawllm config set LLM_PROVIDER groq
+rawllm config set ALLOWED_REQUIREMENTS "json,datetime,requests"
+```
+
+
 
 > **Плагины выполняются с теми же привилегиями, что и сам оркестратор.**  
 > Код плагина имеет полный доступ к файловой системе, сети и переменным окружения процесса.  
@@ -109,25 +159,30 @@ LLM_PROVIDER=ollama LLM_MODEL=mistral python run.py
 ## Архитектура
 
 ```
-dumb-orchestrator-poc/
+rawllm/  (dumb-orchestrator-poc)
 ├── core/
-│   ├── plugin_manager.py   # Загрузка/горячая замена плагинов, версионирование, sandbox
-│   ├── llm_protocol.py     # LLMClientProtocol — общий интерфейс для адаптеров LLM
-│   ├── llm_client.py       # Адаптер Anthropic (реализует протокол)
-│   ├── llm_client_openai.py# Адаптер OpenAI-совместимых API (Groq, Gemini, Ollama, …)
-│   ├── tool_executor.py    # Маршрутизация вызовов инструментов + проверка зависимостей
-│   ├── taor_loop.py        # Цикл Think→Act→Observe→Repeat
-│   ├── config.py           # Настройки: trusted_plugins, allowed_requirements, llm_providers
-│   ├── metrics.py          # Логирование событий в metrics.jsonl
-│   ├── sandbox_wrapper.py  # Обёртка для изолированного запуска плагинов в subprocess
-│   └── utils.py            # Вспомогательные утилиты + extract_imports
+│   ├── llm/                    # LLM abstraction subpackage
+│   │   ├── protocol.py         # LLMClientProtocol structural Protocol
+│   │   ├── registry.py         # LLM_PROVIDERS — single source of truth
+│   │   ├── factory.py          # get_llm_client(provider) factory
+│   │   └── clients/
+│   │       ├── anthropic.py    # AnthropicClient
+│   │       └── openai_compat.py# OpenAICompatibleClient (Groq, Gemini, Ollama, …)
+│   ├── plugin_manager.py       # Загрузка/горячая замена плагинов, версионирование, sandbox
+│   ├── tool_executor.py        # Маршрутизация вызовов инструментов + проверка зависимостей
+│   ├── taor_loop.py            # Цикл Think→Act→Observe→Repeat
+│   ├── config.py               # Настройки: trusted_plugins, allowed_requirements
+│   ├── metrics.py              # Логирование событий в metrics.jsonl
+│   ├── sandbox_wrapper.py      # Обёртка для изолированного запуска плагинов в subprocess
+│   └── utils.py                # Вспомогательные утилиты + extract_imports
 ├── plugins/
-│   └── http.py             # HTTP-транспорт (порт задаётся через HTTP_PORT)
-├── plugins_store/          # Версионированное хранилище плагинов (создаётся автоматически)
-│   ├── current/            # Символические ссылки на активные версии
-│   └── archive/{name}/     # Архив предыдущих версий с метриками
-├── system_prompt.txt       # Системный промпт для LLM
-└── run.py                  # Единая точка входа (Anthropic / Groq / Gemini / Ollama / …)
+│   └── http.py                 # HTTP-транспорт (порт задаётся через HTTP_PORT)
+├── plugins_store/              # Версионированное хранилище плагинов (создаётся автоматически)
+│   ├── current/                # Символические ссылки на активные версии
+│   └── archive/{name}/         # Архив предыдущих версий с метриками
+├── cli.py                      # CLI entry point (rawllm)
+├── system_prompt.txt           # Системный промпт для LLM
+└── run.py                      # Единая точка входа (Anthropic / Groq / Gemini / Ollama / …)
 ```
 
 ## Лицензия
