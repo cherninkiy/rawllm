@@ -11,6 +11,7 @@ def _env_bool(name: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
+
 # Plugins that run in-process (trusted). All others run sandboxed via subprocess.
 # Comma-separated list, e.g. TRUSTED_PLUGINS="http,logger"
 TRUSTED_PLUGINS: list[str] = [
