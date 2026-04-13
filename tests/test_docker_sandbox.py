@@ -13,6 +13,7 @@ from core.docker_sandbox import DockerSandboxError, DockerSandboxRunner
 def _runner(tmp_path: Path) -> DockerSandboxRunner:
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir(parents=True)
+    DockerSandboxRunner._prepared_signature = None
     return DockerSandboxRunner(plugins_dir)
 
 
@@ -109,6 +110,30 @@ def test_prepare_volumes_calls_expected_steps(tmp_path: Path) -> None:
     assert p_sync.call_count == 2
 
 
+def test_prepare_volumes_uses_cache_when_sources_unchanged(tmp_path: Path) -> None:
+    runner = _runner(tmp_path)
+
+    with patch.object(runner, "_ensure_docker_available"), patch.object(
+        runner,
+        "_resolve_source_dir",
+        side_effect=[tmp_path, tmp_path, tmp_path, tmp_path],
+    ), patch.object(
+        runner,
+        "_source_mtime_ns",
+        side_effect=[111, 222, 111, 222],
+    ), patch.object(
+        runner, "_copy_tree"
+    ) as p_copy, patch.object(
+        runner, "_init_workspace_volume"
+    ) as p_init_ws, patch.object(runner, "_sync_volume_from_dir") as p_sync:
+        runner._prepare_volumes()
+        runner._prepare_volumes()
+
+    assert p_copy.call_count == 2
+    assert p_sync.call_count == 2
+    p_init_ws.assert_called_once()
+
+
 def test_resolve_source_dir_relative_and_fallback(tmp_path: Path) -> None:
     runner = _runner(tmp_path)
 
@@ -172,6 +197,16 @@ def test_init_workspace_volume_raises_on_error(tmp_path: Path) -> None:
     with patch.object(runner, "_ensure_volume"), patch("core.docker_sandbox.subprocess.run", return_value=proc):
         with pytest.raises(DockerSandboxError, match="Failed to initialize workspace volume"):
             runner._init_workspace_volume()
+
+
+def test_init_workspace_volume_uses_restricted_permissions(tmp_path: Path) -> None:
+    runner = _runner(tmp_path)
+    proc = SimpleNamespace(returncode=0, stdout="", stderr="")
+    with patch.object(runner, "_ensure_volume"), patch("core.docker_sandbox.subprocess.run", return_value=proc) as p_run:
+        runner._init_workspace_volume()
+
+    called_cmd = p_run.call_args[0][0]
+    assert called_cmd[-1].endswith("chmod 0700 /workspace")
 
 
 def test_copy_tree_rejects_nested_destination(tmp_path: Path) -> None:

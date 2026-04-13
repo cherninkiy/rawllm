@@ -358,6 +358,16 @@ def test_openai_client_chat_raises_on_empty_choices(openai_client: OpenAICompati
             openai_client.chat(messages=[], tools=[])
 
 
+def test_openai_client_chat_raises_on_invalid_json_body(openai_client: OpenAICompatibleClient) -> None:
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "<html>bad gateway</html>"
+    mock_response.json.side_effect = json.JSONDecodeError("Expecting value", "", 0)
+    with patch("core.llm.clients.openai_compat.httpx.post", return_value=mock_response):
+        with pytest.raises(RuntimeError, match="returned invalid JSON"):
+            openai_client.chat(messages=[], tools=[])
+
+
 # ---------------------------------------------------------------------------
 # core.llm.factory
 # ---------------------------------------------------------------------------

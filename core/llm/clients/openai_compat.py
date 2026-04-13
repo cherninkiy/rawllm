@@ -84,7 +84,14 @@ class OpenAICompatibleClient:
             body = response.text[:500]
             raise RuntimeError(f"OpenAI-compatible API error {response.status_code}: {body}")
 
-        payload = response.json()
+        try:
+            payload = response.json()
+        except json.JSONDecodeError as exc:
+            body = response.text[:500]
+            raise RuntimeError(
+                "OpenAI-compatible API returned invalid JSON "
+                f"for status {response.status_code}: {body}"
+            ) from exc
         choices = payload.get("choices") or []
         if not choices:
             raise RuntimeError("OpenAI-compatible API returned no choices")

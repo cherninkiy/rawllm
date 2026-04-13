@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -40,10 +42,14 @@ class DockerSandboxError(RuntimeError):
 class DockerSandboxRunner:
     """Prepare docker volumes and run plugin sandbox calls in Docker."""
 
+    _prepare_lock = threading.Lock()
+    _prepared_signature: tuple[str, int, str, int] | None = None
+
     def __init__(self, plugins_dir: Path) -> None:
         self._plugins_dir = plugins_dir.resolve()
         self._repo_root = self._plugins_dir.parent.resolve()
-        self._staging_dir = Path(SANDBOX_STAGING_DIR).resolve()
+        self._staging_root = Path(SANDBOX_STAGING_DIR).resolve()
+        self._staging_root.mkdir(parents=True, exist_ok=True)
 
     def run_plugin(
         self,
@@ -130,14 +136,41 @@ class DockerSandboxRunner:
         core_source = self._resolve_source_dir(SANDBOX_CORE_REPO_SOURCE, fallback=self._repo_root)
         plugin_source = self._resolve_source_dir(SANDBOX_PLUGIN_STORE_SOURCE, fallback=self._plugins_dir)
 
-        core_staging = self._staging_dir / "core_repo"
-        plugin_staging = self._staging_dir / "plugin_store"
-        self._copy_tree(core_source, core_staging)
-        self._copy_tree(plugin_source, plugin_staging)
+        signature = (
+            str(core_source),
+            self._source_mtime_ns(core_source),
+            str(plugin_source),
+            self._source_mtime_ns(plugin_source),
+        )
 
-        self._init_workspace_volume()
-        self._sync_volume_from_dir(SANDBOX_CORE_REPO_VOLUME, core_staging)
-        self._sync_volume_from_dir(SANDBOX_PLUGIN_STORE_VOLUME, plugin_staging)
+        with self._prepare_lock:
+            if self.__class__._prepared_signature == signature:
+                return
+
+            run_staging = Path(tempfile.mkdtemp(prefix="rawllm_staging_", dir=str(self._staging_root)))
+            try:
+                core_staging = run_staging / "core_repo"
+                plugin_staging = run_staging / "plugin_store"
+                self._copy_tree(core_source, core_staging)
+                self._copy_tree(plugin_source, plugin_staging)
+
+                self._init_workspace_volume()
+                self._sync_volume_from_dir(SANDBOX_CORE_REPO_VOLUME, core_staging)
+                self._sync_volume_from_dir(SANDBOX_PLUGIN_STORE_VOLUME, plugin_staging)
+                self.__class__._prepared_signature = signature
+            finally:
+                shutil.rmtree(run_staging, ignore_errors=True)
+
+    def _source_mtime_ns(self, source: Path) -> int:
+        latest = source.stat().st_mtime_ns
+        for path in source.rglob("*"):
+            try:
+                mtime = path.stat().st_mtime_ns
+            except OSError:
+                continue
+            if mtime > latest:
+                latest = mtime
+        return latest
 
     def _resolve_source_dir(self, configured: str, fallback: Path) -> Path:
         p = Path(configured)
@@ -164,7 +197,7 @@ class DockerSandboxRunner:
             shutil.rmtree(dst)
         dst.parent.mkdir(parents=True, exist_ok=True)
 
-        staging_name = self._staging_dir.name
+        staging_name = self._staging_root.name
         shutil.copytree(
             src,
             dst,
@@ -209,7 +242,7 @@ class DockerSandboxRunner:
         script = (
             "mkdir -p /workspace && "
             "chown -R \"$PLUGIN_USER\" /workspace 2>/dev/null || true; "
-            "chmod -R 0777 /workspace"
+            "chmod 0700 /workspace"
         )
         proc = subprocess.run(
             [
