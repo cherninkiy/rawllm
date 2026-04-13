@@ -9,8 +9,6 @@ Usage::
 import os
 from typing import Any
 
-from core.llm.clients.anthropic import AnthropicClient
-from core.llm.clients.openai_compat import OpenAICompatibleClient
 from core.llm.protocol import LLMClientProtocol
 from core.llm.registry import LLM_PROVIDERS
 
@@ -51,8 +49,12 @@ def get_llm_client(provider: str | None = None) -> LLMClientProtocol:
     model: str = os.environ.get("LLM_MODEL", cfg["model"])
 
     if provider == "anthropic":
+        from core.llm.clients.anthropic import AnthropicClient
+
         return AnthropicClient(api_key=api_key, model=model)
 
     # All other providers use an OpenAI-compatible endpoint.
+    from core.llm.clients.openai_compat import OpenAICompatibleClient
+
     base_url: str = os.environ.get("LLM_BASE_URL", cfg["base_url"])
     return OpenAICompatibleClient(api_key=api_key, base_url=base_url, model=model)

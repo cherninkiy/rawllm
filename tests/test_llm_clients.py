@@ -237,72 +237,74 @@ def test_anthropic_client_chat_raises_on_api_error(anthropic_client: AnthropicCl
 def openai_client() -> OpenAICompatibleClient:
     client = OpenAICompatibleClient.__new__(OpenAICompatibleClient)
     client.model = "llama3"
-    client._client = MagicMock()
+    client._base_url = "https://example.test/v1"
+    client._headers = {"Content-Type": "application/json", "Authorization": "Bearer test-key"}
     return client
 
 
 def test_openai_client_chat_returns_text(openai_client: OpenAICompatibleClient) -> None:
-    mock_message = MagicMock()
-    mock_message.content = "Hello from Llama!"
-    mock_message.tool_calls = None
-    mock_choice = MagicMock()
-    mock_choice.finish_reason = "stop"
-    mock_choice.message = mock_message
     mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    openai_client._client.chat.completions.create.return_value = mock_response
-
-    result = openai_client.chat(
-        messages=[{"role": "user", "content": "Hi"}],
-        tools=[],
-        system="Be helpful",
-    )
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "message": {"content": "Hello from Llama!", "tool_calls": None},
+            }
+        ]
+    }
+    with patch("core.llm.clients.openai_compat.httpx.post", return_value=mock_response):
+        result = openai_client.chat(
+            messages=[{"role": "user", "content": "Hi"}],
+            tools=[],
+            system="Be helpful",
+        )
     assert result == {"type": "text", "content": "Hello from Llama!"}
 
 
 def test_openai_client_chat_returns_tool_calls(openai_client: OpenAICompatibleClient) -> None:
-    mock_tc = MagicMock()
-    mock_tc.id = "tc1"
-    mock_tc.function.name = "run_plugin"
-    mock_tc.function.arguments = '{"name": "echo"}'
-
-    mock_message = MagicMock()
-    mock_message.content = None
-    mock_message.tool_calls = [mock_tc]
-    mock_choice = MagicMock()
-    mock_choice.finish_reason = "tool_calls"
-    mock_choice.message = mock_message
     mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    openai_client._client.chat.completions.create.return_value = mock_response
-
-    result = openai_client.chat(
-        messages=[{"role": "user", "content": "Run echo"}],
-        tools=[{"type": "function", "function": {"name": "run_plugin"}}],
-    )
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "message": {
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "tc1",
+                            "function": {"name": "run_plugin", "arguments": '{"name": "echo"}'},
+                        }
+                    ],
+                },
+            }
+        ]
+    }
+    with patch("core.llm.clients.openai_compat.httpx.post", return_value=mock_response):
+        result = openai_client.chat(
+            messages=[{"role": "user", "content": "Run echo"}],
+            tools=[{"type": "function", "function": {"name": "run_plugin"}}],
+        )
     assert result["type"] == "tool_calls"
     assert result["tool_calls"][0] == {"id": "tc1", "name": "run_plugin", "input": {"name": "echo"}}
 
 
 def test_openai_client_chat_injects_system_as_first_message(openai_client: OpenAICompatibleClient) -> None:
     """The system prompt should be prepended as a system message."""
-    mock_message = MagicMock()
-    mock_message.content = "OK"
-    mock_message.tool_calls = None
-    mock_choice = MagicMock()
-    mock_choice.finish_reason = "stop"
-    mock_choice.message = mock_message
     mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    openai_client._client.chat.completions.create.return_value = mock_response
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"finish_reason": "stop", "message": {"content": "OK", "tool_calls": None}}]
+    }
+    with patch("core.llm.clients.openai_compat.httpx.post", return_value=mock_response) as mock_post:
+        openai_client.chat(
+            messages=[{"role": "user", "content": "Hello"}],
+            tools=[],
+            system="You are a helpful assistant",
+        )
 
-    openai_client.chat(
-        messages=[{"role": "user", "content": "Hello"}],
-        tools=[],
-        system="You are a helpful assistant",
-    )
-
-    call_kwargs = openai_client._client.chat.completions.create.call_args[1]
+    call_kwargs = mock_post.call_args[1]["json"]
     messages_sent = call_kwargs["messages"]
     assert messages_sent[0] == {"role": "system", "content": "You are a helpful assistant"}
     assert messages_sent[1] == {"role": "user", "content": "Hello"}
@@ -310,21 +312,25 @@ def test_openai_client_chat_injects_system_as_first_message(openai_client: OpenA
 
 def test_openai_client_chat_malformed_tool_call_arguments(openai_client: OpenAICompatibleClient) -> None:
     """Malformed JSON in tool call arguments should not raise."""
-    mock_tc = MagicMock()
-    mock_tc.id = "tc1"
-    mock_tc.function.name = "tool"
-    mock_tc.function.arguments = "INVALID JSON"
-
-    mock_message = MagicMock()
-    mock_message.tool_calls = [mock_tc]
-    mock_choice = MagicMock()
-    mock_choice.finish_reason = "tool_calls"
-    mock_choice.message = mock_message
     mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    openai_client._client.chat.completions.create.return_value = mock_response
-
-    result = openai_client.chat(messages=[], tools=[])
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "message": {
+                    "tool_calls": [
+                        {
+                            "id": "tc1",
+                            "function": {"name": "tool", "arguments": "INVALID JSON"},
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    with patch("core.llm.clients.openai_compat.httpx.post", return_value=mock_response):
+        result = openai_client.chat(messages=[], tools=[])
     assert result["tool_calls"][0]["input"] == {}
 
 
@@ -357,8 +363,7 @@ def test_factory_returns_anthropic_client(monkeypatch: pytest.MonkeyPatch) -> No
 def test_factory_returns_openai_compat_client(monkeypatch: pytest.MonkeyPatch) -> None:
     from core.llm.factory import get_llm_client
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    with patch("openai.OpenAI"):
-        client = get_llm_client("groq")
+    client = get_llm_client("groq")
     assert isinstance(client, OpenAICompatibleClient)
 
 
@@ -366,8 +371,7 @@ def test_factory_reads_llm_provider_from_env(monkeypatch: pytest.MonkeyPatch) ->
     from core.llm.factory import get_llm_client
     monkeypatch.setenv("LLM_PROVIDER", "groq")
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    with patch("openai.OpenAI"):
-        client = get_llm_client()
+    client = get_llm_client()
     assert isinstance(client, OpenAICompatibleClient)
 
 
@@ -382,6 +386,14 @@ def test_factory_overrides_model(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_factory_ollama_no_api_key_required(monkeypatch: pytest.MonkeyPatch) -> None:
     from core.llm.factory import get_llm_client
-    with patch("openai.OpenAI"):
-        client = get_llm_client("ollama")
+    client = get_llm_client("ollama")
     assert isinstance(client, OpenAICompatibleClient)
+
+
+def test_factory_ollama_qwen_coder_no_api_key_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.llm.factory import get_llm_client
+
+    client = get_llm_client("ollama-qwen-coder")
+
+    assert isinstance(client, OpenAICompatibleClient)
+    assert client.model == "qwen2.5-coder:7b"

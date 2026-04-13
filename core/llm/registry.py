@@ -24,13 +24,23 @@ LLM_PROVIDERS: dict[str, dict[str, Any]] = {
         "model": "gemini-2.0-flash",
     },
     "openrouter": {
-        "api_key_env": "OPENROUTER_API_KEY",
+        "api_key_env": "OPEN_ROUTER_API_KEY",
         "base_url": "https://openrouter.ai/api/v1",
-        "model": "mistralai/mistral-7b-instruct:free",
+        "model": "qwen/qwen3-coder:free",
+    },
+    "deepseek": {
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
     },
     "ollama": {
         "api_key_env": None,
         "base_url": "http://localhost:11434/v1",
         "model": "llama3.2:3b",
+    },
+    "ollama-qwen-coder": {
+        "api_key_env": None,
+        "base_url": "http://localhost:11434/v1",
+        "model": "qwen2.5-coder:7b",
     },
 }

@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Any
 
-from openai import OpenAI
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,10 @@ class OpenAICompatibleClient:
             model: Model identifier used for all requests.
         """
         self.model = model
-        self._client = OpenAI(api_key=api_key or "none", base_url=base_url)
+        self._base_url = base_url.rstrip("/")
+        self._headers: dict[str, str] = {"Content-Type": "application/json"}
+        if api_key:
+            self._headers["Authorization"] = f"Bearer {api_key}"
 
     # ------------------------------------------------------------------
     # Protocol implementation
@@ -70,24 +73,43 @@ class OpenAICompatibleClient:
         if tools:
             kwargs["tools"] = tools
 
-        response = self._client.chat.completions.create(**kwargs)
-        choice = response.choices[0]
+        response = httpx.post(
+            f"{self._base_url}/chat/completions",
+            headers=self._headers,
+            json=kwargs,
+            timeout=120,
+            trust_env=False,
+        )
+        if response.status_code >= 400:
+            body = response.text[:500]
+            raise RuntimeError(f"OpenAI-compatible API error {response.status_code}: {body}")
 
-        if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+        payload = response.json()
+        choices = payload.get("choices") or []
+        if not choices:
+            raise RuntimeError("OpenAI-compatible API returned no choices")
+
+        choice = choices[0]
+        message = choice.get("message") or {}
+        finish_reason = choice.get("finish_reason")
+        tool_calls_raw = message.get("tool_calls") or []
+
+        if finish_reason == "tool_calls" and tool_calls_raw:
             tool_calls = []
-            for tc in choice.message.tool_calls:
+            for tc in tool_calls_raw:
+                fn = tc.get("function") or {}
                 try:
-                    arguments = json.loads(tc.function.arguments or "{}")
+                    arguments = json.loads(fn.get("arguments") or "{}")
                 except json.JSONDecodeError:
                     arguments = {}
                 tool_calls.append(
                     {
-                        "id": tc.id,
-                        "name": tc.function.name,
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
                         "input": arguments,
                     }
                 )
             return {"type": "tool_calls", "tool_calls": tool_calls}
 
-        content = (choice.message.content or "").strip()
+        content = (message.get("content") or "").strip()
         return {"type": "text", "content": content}
