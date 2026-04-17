@@ -1,0 +1,45 @@
+# <type>(<scope>): <subject>
+# Subject: imperative mood, <= 50 chars, no trailing period
+#
+# Body rules:
+# - explain what changed and why
+# - use '-' bullet points
+# - keep lines <= 72 chars
+#
+# Footer (optional):
+# - refs: #123
+# - breaking: <description>
+
+
+# Project-focused examples:
+#
+# feat(sandbox): add Docker backend for untrusted plugins
+# - run plugins in container with read-only root filesystem
+# - add isolated workspace/core/plugin volumes
+# - add backend toggle via SANDBOX_BACKEND
+#
+# fix(llm): use direct httpx transport for compat clients
+# - replace SDK calls with POST /chat/completions
+# - keep tool-call payload mapping unchanged
+# - improve error handling for empty choices and 4xx/5xx
+#
+# test(coverage): raise coverage for critical runtime modules
+# - add branch tests for plugin_manager error paths
+# - add docker_sandbox unit tests with subprocess mocks
+# - keep total coverage above fail-under threshold
+#
+# docs(security): clarify backend-specific risk boundaries
+# - document Docker isolation properties and residual risk
+# - distinguish docker from legacy subprocess mode
+#
+# pr(core): resolve review feedback for PR #5
+# - fix markdown list formatting in SECURITY.md
+# - align README warning with sandbox backend behavior
+# - correct smoke script typing for skipped provider state
+
+
+# Allowed types:
+# pr, feat, fix, docs, style, refactor, test, chore, perf, ci, build
+
+# Suggested scopes for this repo:
+# sandbox, llm, plugins, core, cli, docs, tests, coverage, ci

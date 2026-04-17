@@ -1,0 +1,30 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+timeout = 30
+
+[project]
+name = "rawllm"
+version = "0.1.0"
+description = "RawLLM – minimal orchestrator that exposes the raw power of LLMs"
+requires-python = ">=3.10"
+
+[project.scripts]
+rawllm = "cli:cli"
+
+[tool.coverage.run]
+source = ["core"]
+omit = [
+    # backward-compat shims – covered by integration imports
+    "core/llm_client.py",
+    "core/llm_client_openai.py",
+    "core/llm_protocol.py",
+    # sandbox_wrapper runs as a subprocess; covered by test_sandbox_wrapper.py
+    "core/sandbox_wrapper.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
