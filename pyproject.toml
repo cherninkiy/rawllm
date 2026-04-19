@@ -2,14 +2,50 @@
 pythonpath = ["."]
 timeout = 30
 
+[build-system]
+requires = ["setuptools>=68,<72", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "rawllm"
 version = "0.1.0"
 description = "RawLLM – minimal orchestrator that exposes the raw power of LLMs"
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
+authors = [
+    { name = "cherninkiy", email = "cherninkiy@gmail.com" },
+]
+keywords = ["llm", "orchestrator", "agent", "anthropic", "groq", "gemini", "plugin"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "anthropic>=0.30.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/cherninkiy/dumb-orchestrator-poc"
+Repository = "https://github.com/cherninkiy/dumb-orchestrator-poc"
+Changelog = "https://github.com/cherninkiy/dumb-orchestrator-poc/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/cherninkiy/dumb-orchestrator-poc/issues"
 
 [project.scripts]
 rawllm = "cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "plugins*"]
 
 [tool.coverage.run]
 source = ["core"]
