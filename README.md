@@ -87,6 +87,7 @@ features are automatically active.
 | `groq` | `GROQ_API_KEY` | `llama3-70b-8192` |
 | `gemini` | `GEMINI_API_KEY` | `gemini-2.0-flash` |
 | `openrouter` | `OPEN_ROUTER_API_KEY` | `qwen/qwen3-coder:free` |
+| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
 | `ollama` | *(none required)* | `llama3.2:3b` |
 | `ollama-qwen-coder` | *(none required)* | `qwen2.5-coder:7b` |
 
@@ -110,6 +111,12 @@ echo "OPEN_ROUTER_API_KEY=sk-or-..." >> .env
 LLM_PROVIDER=openrouter python run.py
 # Use a specific free model:
 LLM_PROVIDER=openrouter LLM_MODEL=google/gemma-3-27b-it:free python run.py
+```
+
+### DeepSeek
+```bash
+echo "DEEPSEEK_API_KEY=sk-..." >> .env
+LLM_PROVIDER=deepseek python run.py
 ```
 
 ### Ollama (fully local, no API key)

@@ -57,6 +57,15 @@ def main() -> None:
     taor_loop = TAORLoop(llm_client, tool_executor, system_prompt)
 
     # Wire up the HTTP plugin callback now that the loop is ready.
+    # NOTE: The HTTP plugin runs a threaded WSGI server.  Each incoming
+    # request is handled in its own thread and calls
+    # ``taor_loop.process_request``, which internally uses
+    # ``asyncio.run(...)`` to create a *new* event loop per thread.
+    # This is safe as long as no caller thread already owns a running
+    # event loop (e.g. when invoked from an async framework such as
+    # FastAPI / asyncio server).  If you integrate RawLLM inside an
+    # existing async context, replace the callback with
+    # ``taor_loop.process_request_async`` and await it properly instead.
     http_plugin = plugin_manager.get_plugin("http")
     if http_plugin is not None:
         init_fn = getattr(http_plugin, "init", None)

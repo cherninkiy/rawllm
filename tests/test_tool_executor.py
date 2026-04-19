@@ -1,5 +1,6 @@
 """Tests for ToolExecutor."""
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -97,3 +98,37 @@ def test_append_pending_requirements_logs_on_oserror(tmp_path: Path) -> None:
         _append_pending_requirements("plugin_x", ["requests"])
 
     log_exc.assert_called_once_with("Failed to write pending_requirements.txt")
+
+
+# ---------------------------------------------------------------------------
+# Async wrappers
+# ---------------------------------------------------------------------------
+
+
+def test_add_plugin_async(executor: ToolExecutor, mock_pm: MagicMock) -> None:
+    mock_pm.add_plugin.return_value = {"status": "ok", "plugin": "ap"}
+    result = asyncio.run(executor.add_plugin_async("ap", "def run(d): return d"))
+    mock_pm.add_plugin.assert_called_once_with("ap", "def run(d): return d")
+    assert result == {"status": "ok", "plugin": "ap"}
+
+
+def test_run_plugin_async(executor: ToolExecutor, mock_pm: MagicMock) -> None:
+    mock_pm.call_plugin.return_value = {"result": "async_ok"}
+    result = asyncio.run(executor.run_plugin_async("rp", {"k": "v"}))
+    mock_pm.call_plugin.assert_called_once_with("rp", {"k": "v"})
+    assert result == {"result": "async_ok"}
+
+
+def test_unload_plugin_async(executor: ToolExecutor, mock_pm: MagicMock) -> None:
+    mock_pm.unload_plugin.return_value = {"status": "ok", "plugin": "up"}
+    result = asyncio.run(executor.unload_plugin_async("up"))
+    mock_pm.unload_plugin.assert_called_once_with("up")
+    assert result == {"status": "ok", "plugin": "up"}
+
+
+def test_run_plugins_parallel(executor: ToolExecutor, mock_pm: MagicMock) -> None:
+    mock_pm.call_plugin.side_effect = lambda name, inp: {"plugin": name}
+    results = asyncio.run(
+        executor.run_plugins_parallel([("a", {"x": 1}), ("b", {"y": 2})])
+    )
+    assert results == [{"plugin": "a"}, {"plugin": "b"}]

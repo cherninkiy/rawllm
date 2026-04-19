@@ -172,3 +172,50 @@ def test_process_request_max_iterations(
     assert "maximum iterations" in result
     assert mock_llm.chat.call_count == 5  # max_iterations=5
 
+
+# ---------------------------------------------------------------------------
+# _dispatch() sync – direct unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_dispatch_sync_add_plugin(loop: TAORLoop, mock_executor: MagicMock) -> None:
+    mock_executor.add_plugin.return_value = {"status": "ok"}
+    result = loop._dispatch("add_plugin", {"name": "p", "code": "def run(d): return d"})
+    mock_executor.add_plugin.assert_called_once_with(name="p", code="def run(d): return d")
+    assert result == {"status": "ok"}
+
+
+def test_dispatch_sync_run_plugin(loop: TAORLoop, mock_executor: MagicMock) -> None:
+    mock_executor.run_plugin.return_value = {"result": 1}
+    result = loop._dispatch("run_plugin", {"name": "p", "input_data": {"x": 1}})
+    mock_executor.run_plugin.assert_called_once_with(name="p", input_data={"x": 1})
+    assert result == {"result": 1}
+
+
+def test_dispatch_sync_run_plugin_default_input(loop: TAORLoop, mock_executor: MagicMock) -> None:
+    mock_executor.run_plugin.return_value = {"result": "ok"}
+    loop._dispatch("run_plugin", {"name": "p"})  # no input_data key
+    mock_executor.run_plugin.assert_called_once_with(name="p", input_data={})
+
+
+def test_dispatch_sync_unload_plugin(loop: TAORLoop, mock_executor: MagicMock) -> None:
+    mock_executor.unload_plugin.return_value = {"status": "ok"}
+    result = loop._dispatch("unload_plugin", {"name": "old"})
+    mock_executor.unload_plugin.assert_called_once_with(name="old")
+    assert result == {"status": "ok"}
+
+
+def test_dispatch_sync_run_plugins_parallel(loop: TAORLoop, mock_executor: MagicMock) -> None:
+    mock_executor.run_plugin.side_effect = lambda name, input_data: {"plugin": name}
+    result = loop._dispatch(
+        "run_plugins_parallel",
+        {"calls": [["p1", {"a": 1}], ["p2", {"b": 2}]]},
+    )
+    assert result == {"results": [{"plugin": "p1"}, {"plugin": "p2"}]}
+
+
+def test_dispatch_sync_unknown_tool(loop: TAORLoop) -> None:
+    result = loop._dispatch("fly_to_moon", {})
+    assert "error" in result
+    assert "fly_to_moon" in result["error"]
+

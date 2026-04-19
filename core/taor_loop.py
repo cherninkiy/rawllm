@@ -237,7 +237,12 @@ class TAORLoop:
     # ------------------------------------------------------------------
 
     def _dispatch(self, tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
-        """Route a tool call to the executor and return the result."""
+        """Route a tool call to the executor and return the result.
+
+        Note: kept in sync with :meth:`_dispatch_async`.  Direct callers
+        should prefer the async path; this synchronous variant is retained
+        for test coverage and potential future use.
+        """
         if tool_name == "add_plugin":
             return self._executor.add_plugin(
                 name=tool_input["name"],
@@ -250,6 +255,14 @@ class TAORLoop:
             )
         if tool_name == "unload_plugin":
             return self._executor.unload_plugin(name=tool_input["name"])
+        if tool_name == "run_plugins_parallel":
+            raw_calls = tool_input.get("calls", [])
+            calls = [(c[0], c[1]) for c in raw_calls]
+            results = [
+                self._executor.run_plugin(name=name, input_data=inp)
+                for name, inp in calls
+            ]
+            return {"results": results}
 
         return {"error": f"Unknown tool: {tool_name!r}"}
 
