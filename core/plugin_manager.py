@@ -25,6 +25,9 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import asyncio
+from typing import List, Tuple
+
 import core.metrics as metrics
 from core.config import ALLOWED_REQUIREMENTS, SANDBOX_BACKEND, SANDBOX_DOCKER_REQUIRED, SANDBOX_TIMEOUT, TRUSTED_PLUGINS
 from core.docker_sandbox import DockerSandboxRunner
@@ -334,6 +337,44 @@ class PluginManager:
         """Return a snapshot copy of the current plugin registry (thread-safe)."""
         with self._lock:
             return dict(self.plugins)
+
+    # ------------------------------------------------------------------
+    # Async wrappers
+    # ------------------------------------------------------------------
+
+    async def call_plugin_async(
+        self, name: str, input_data: dict[str, Any], timeout: int = 30
+    ) -> dict[str, Any]:
+        """Async wrapper for :meth:`call_plugin`."""
+        return await asyncio.to_thread(self.call_plugin, name, input_data, timeout)
+
+    async def add_plugin_async(self, name: str, code: str) -> dict[str, Any]:
+        """Async wrapper for :meth:`add_plugin`."""
+        return await asyncio.to_thread(self.add_plugin, name, code)
+
+    async def unload_plugin_async(self, name: str) -> dict[str, Any]:
+        """Async wrapper for :meth:`unload_plugin`."""
+        return await asyncio.to_thread(self.unload_plugin, name)
+
+    async def reload_plugin_async(self, name: str) -> dict[str, Any]:
+        """Async wrapper for :meth:`reload_plugin`."""
+        return await asyncio.to_thread(self.reload_plugin, name)
+
+    async def rollback_plugin_async(self, name: str) -> dict[str, Any]:
+        """Async wrapper for :meth:`rollback_plugin`."""
+        return await asyncio.to_thread(self.rollback_plugin, name)
+
+    async def call_plugins_parallel(
+        self,
+        calls: List[Tuple[str, dict[str, Any]]],
+        timeout: int = 30,
+    ) -> List[dict[str, Any]]:
+        """Execute multiple plugins concurrently and return results in order."""
+        return list(
+            await asyncio.gather(
+                *[self.call_plugin_async(name, inp, timeout) for name, inp in calls]
+            )
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

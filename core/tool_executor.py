@@ -1,7 +1,8 @@
 """Tool executor: bridges the LLM tool calls and the PluginManager."""
 
+import asyncio
 import logging
-from typing import Any
+from typing import Any, List, Tuple
 
 import core.metrics as metrics
 from core.config import ALLOWED_REQUIREMENTS, PENDING_REQUIREMENTS_FILE
@@ -68,6 +69,32 @@ class ToolExecutor:
         """
         logger.info("Tool: unload_plugin(%r)", name)
         return self._pm.unload_plugin(name)
+
+    # ------------------------------------------------------------------
+    # Async wrappers
+    # ------------------------------------------------------------------
+
+    async def add_plugin_async(self, name: str, code: str) -> dict[str, Any]:
+        """Async wrapper for :meth:`add_plugin`."""
+        return await asyncio.to_thread(self.add_plugin, name, code)
+
+    async def run_plugin_async(
+        self, name: str, input_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Async wrapper for :meth:`run_plugin`."""
+        return await asyncio.to_thread(self.run_plugin, name, input_data)
+
+    async def unload_plugin_async(self, name: str) -> dict[str, Any]:
+        """Async wrapper for :meth:`unload_plugin`."""
+        return await asyncio.to_thread(self.unload_plugin, name)
+
+    async def run_plugins_parallel(
+        self, calls: List[Tuple[str, dict[str, Any]]]
+    ) -> List[dict[str, Any]]:
+        """Execute multiple plugins concurrently and return results in order."""
+        return list(
+            await asyncio.gather(*[self.run_plugin_async(name, inp) for name, inp in calls])
+        )
 
 
 def _append_pending_requirements(plugin_name: str, modules: list[str]) -> None:
