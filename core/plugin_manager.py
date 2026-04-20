@@ -447,7 +447,10 @@ class PluginManager:
     def _save_resource_assignments(self) -> None:
         path = _resource_assignments_path(self.plugins_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self._resource_assignments, indent=2), encoding="utf-8")
+        try:
+            path.write_text(json.dumps(self._resource_assignments, indent=2), encoding="utf-8")
+        except OSError:
+            logger.exception("Failed to persist resource assignments")
 
     def _validate_manifest(self, manifest: dict[str, Any] | None) -> dict[str, Any] | None:
         if manifest is None:
@@ -606,7 +609,7 @@ class PluginManager:
         for port in assignments.get("ports", []):
             env[f"PORT_{port}"] = str(port)
         if "workspace" in assignments:
-            env["WORKSPACE_PATH"] = str(runtime_config.WORKSPACE_PATH)
+            env["WORKSPACE_PATH"] = str(assignments["workspace"])
         for svc_name, uri in assignments.get("services", {}).items():
             env[f"{svc_name.upper()}_URI"] = uri
         return env

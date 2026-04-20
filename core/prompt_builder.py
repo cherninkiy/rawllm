@@ -17,18 +17,18 @@ def build_startup_prompt(
 
     lines = ["Available resources in this session:"]
 
-    ports = resources.get("ports") or []
-    if ports:
-        port_list = list(ports)
+    raw_ports = resources.get("ports")
+    if isinstance(raw_ports, list) and raw_ports:
+        port_list = raw_ports
         lines.append(f"- Network ports: {port_list[0]}-{port_list[-1]}")
 
     workspace = resources.get("workspace")
     if workspace:
         lines.append(f"- Workspace directory: {workspace} (read/write)")
 
-    services = resources.get("services") or {}
-    if services:
-        lines.append(f"- Services: {', '.join(sorted(services))}")
+    raw_services = resources.get("services")
+    if isinstance(raw_services, dict) and raw_services:
+        lines.append(f"- Services: {', '.join(sorted(raw_services))}")
 
     task = user_task or "create an interface for user interaction using these resources."
     lines.append("")

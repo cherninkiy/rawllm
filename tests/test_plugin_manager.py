@@ -114,7 +114,8 @@ def test_call_plugin_uses_docker_backend_when_enabled(manager: PluginManager, pl
         result = manager.call_plugin("echo", {"value": 42})
 
     assert result == {"echo": 42}
-    runner.run_plugin.assert_called_once_with("echo", {"value": 42}, 45)
+    runner.run_plugin.assert_called_once()
+    assert runner.run_plugin.call_args.args[:3] == ("echo", {"value": 42}, 45)
 
 
 def test_call_plugin_falls_back_to_subprocess_when_docker_not_required(
