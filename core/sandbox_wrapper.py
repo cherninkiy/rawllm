@@ -17,6 +17,7 @@ sys.dont_write_bytecode = True
 
 import importlib.util  # noqa: E402
 import json            # noqa: E402
+import os              # noqa: E402
 import traceback       # noqa: E402
 import uuid            # noqa: E402
 
@@ -26,6 +27,9 @@ def main() -> None:
         payload = json.loads(sys.stdin.read())
         plugin_path: str = payload["plugin_path"]
         input_data: dict = payload["input_data"]
+        env: dict[str, str] = payload.get("env", {})
+        if isinstance(env, dict):
+            os.environ.update({str(key): str(value) for key, value in env.items()})
 
         # Use a unique module name per invocation to prevent any accidental
         # collision with previously cached module objects in sys.modules.

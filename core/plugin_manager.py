@@ -28,6 +28,7 @@ from typing import Any
 import asyncio
 from typing import List, Tuple
 
+import core.config as runtime_config
 import core.metrics as metrics
 from core.config import ALLOWED_REQUIREMENTS, SANDBOX_BACKEND, SANDBOX_DOCKER_REQUIRED, SANDBOX_TIMEOUT, TRUSTED_PLUGINS
 from core.docker_sandbox import DockerSandboxRunner
@@ -35,7 +36,7 @@ from core.utils import extract_imports
 
 logger = logging.getLogger(__name__)
 
-PROTECTED_PLUGINS = {"http"}
+PROTECTED_PLUGINS: set[str] = set()
 
 
 def _touch_future(path: Path) -> None:
@@ -94,6 +95,10 @@ def _archive_dir(plugins_dir: Path, name: str) -> Path:
 
 def _version_json_path(plugins_dir: Path, name: str) -> Path:
     return _archive_dir(plugins_dir, name) / "version.json"
+
+
+def _resource_assignments_path(plugins_dir: Path) -> Path:
+    return _plugins_store(plugins_dir) / "resource_assignments.json"
 
 
 def _read_version_meta(plugins_dir: Path, name: str) -> dict[str, Any]:
@@ -168,6 +173,7 @@ class PluginManager:
         # In-memory metrics snapshot per plugin (updated after each execution).
         self._exec_counts: dict[str, dict[str, Any]] = {}
         self._docker_runner: DockerSandboxRunner | None = None
+        self._resource_assignments: dict[str, dict[str, Any]] = self._load_resource_assignments()
 
     # ------------------------------------------------------------------
     # Public API
@@ -204,11 +210,23 @@ class PluginManager:
 
         version_str = self._current_version_str(name)
         is_trusted = name in TRUSTED_PLUGINS or name in PROTECTED_PLUGINS
+        env = self._get_plugin_env(name)
 
         if is_trusted:
-            result, exec_ms, success, err_type, tb_str = self._call_inprocess(name, plugin, input_data, timeout)
+            result, exec_ms, success, err_type, tb_str = self._call_inprocess(
+                name,
+                plugin,
+                input_data,
+                timeout,
+                env,
+            )
         else:
-            result, exec_ms, success, err_type, tb_str = self._call_subprocess(name, input_data, timeout)
+            result, exec_ms, success, err_type, tb_str = self._call_subprocess(
+                name,
+                input_data,
+                timeout,
+                env,
+            )
 
         risk = _import_risk_score(self._read_plugin_code(name))
         metrics.log_execution(
@@ -223,13 +241,19 @@ class PluginManager:
         self._exec_counts[name] = {"last_exec_ms": exec_ms, "success": success}
         return result
 
-    def add_plugin(self, name: str, code: str) -> dict[str, Any]:
+    def add_plugin(self, name: str, code: str, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """Write *code* to ``plugins/{name}.py`` and hot-reload it.
 
         Archives the previous version (if any) and updates symlinks in
         ``plugins_store/current/``.
         """
         path = self.plugins_dir / f"{name}.py"
+        old_assignment = self._resource_assignments.get(name)
+        assignment_result = self._resolve_manifest_resources(name, manifest)
+        if "error" in assignment_result:
+            return assignment_result
+
+        assigned_resources = assignment_result["assigned"]
         try:
             # Archive existing version before overwriting.
             if path.exists():
@@ -244,9 +268,20 @@ class PluginManager:
             _touch_future(path)
             result = self.reload_plugin(name)
             if "status" in result:
+                if assigned_resources:
+                    self._resource_assignments[name] = assigned_resources
+                else:
+                    self._resource_assignments.pop(name, None)
+                self._save_resource_assignments()
                 _update_current_symlink(self.plugins_dir, name, path)
+                result["assigned"] = assigned_resources
             return result
         except Exception as exc:
+            if old_assignment is not None:
+                self._resource_assignments[name] = old_assignment
+            else:
+                self._resource_assignments.pop(name, None)
+            self._save_resource_assignments()
             logger.exception("Failed to add plugin %r", name)
             return {"error": str(exc)}
 
@@ -295,6 +330,8 @@ class PluginManager:
 
             del self.plugins[name]
             sys.modules.pop(f"plugins.{name}", None)
+            self._resource_assignments.pop(name, None)
+            self._save_resource_assignments()
 
         logger.info("Plugin %r unloaded.", name)
         return {"status": "ok", "plugin": name}
@@ -338,6 +375,17 @@ class PluginManager:
         with self._lock:
             return dict(self.plugins)
 
+    def get_resource_assignments(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return json.loads(json.dumps(self._resource_assignments))
+
+    def get_resource_assignment(self, name: str) -> dict[str, Any] | None:
+        with self._lock:
+            assignment = self._resource_assignments.get(name)
+            if assignment is None:
+                return None
+            return json.loads(json.dumps(assignment))
+
     # ------------------------------------------------------------------
     # Async wrappers
     # ------------------------------------------------------------------
@@ -348,9 +396,14 @@ class PluginManager:
         """Async wrapper for :meth:`call_plugin`."""
         return await asyncio.to_thread(self.call_plugin, name, input_data, timeout)
 
-    async def add_plugin_async(self, name: str, code: str) -> dict[str, Any]:
+    async def add_plugin_async(
+        self,
+        name: str,
+        code: str,
+        manifest: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Async wrapper for :meth:`add_plugin`."""
-        return await asyncio.to_thread(self.add_plugin, name, code)
+        return await asyncio.to_thread(self.add_plugin, name, code, manifest)
 
     async def unload_plugin_async(self, name: str) -> dict[str, Any]:
         """Async wrapper for :meth:`unload_plugin`."""
@@ -380,6 +433,142 @@ class PluginManager:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _load_resource_assignments(self) -> dict[str, dict[str, Any]]:
+        path = _resource_assignments_path(self.plugins_dir)
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            logger.exception("Failed to read persisted resource assignments")
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save_resource_assignments(self) -> None:
+        path = _resource_assignments_path(self.plugins_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self._resource_assignments, indent=2), encoding="utf-8")
+
+    def _validate_manifest(self, manifest: dict[str, Any] | None) -> dict[str, Any] | None:
+        if manifest is None:
+            return None
+        if not isinstance(manifest, dict):
+            raise ValueError("Manifest must be an object.")
+
+        validated: dict[str, Any] = {}
+        for section in ("requires", "publishes"):
+            raw_section = manifest.get(section, {})
+            if raw_section is None:
+                raw_section = {}
+            if not isinstance(raw_section, dict):
+                raise ValueError(f"Manifest section {section!r} must be an object.")
+            unknown_keys = set(raw_section) - {"ports", "volumes", "services"}
+            if unknown_keys:
+                raise ValueError(
+                    f"Manifest section {section!r} contains unsupported keys: {sorted(unknown_keys)}."
+                )
+
+            validated_section: dict[str, Any] = {}
+            ports = raw_section.get("ports", [])
+            volumes = raw_section.get("volumes", [])
+            services = raw_section.get("services", [])
+
+            if not isinstance(ports, list) or any(not isinstance(port, int) for port in ports):
+                raise ValueError(f"Manifest section {section!r}.ports must be a list of integers.")
+            if not isinstance(volumes, list) or any(not isinstance(volume, str) for volume in volumes):
+                raise ValueError(f"Manifest section {section!r}.volumes must be a list of strings.")
+            if not isinstance(services, list) or any(not isinstance(service, str) for service in services):
+                raise ValueError(f"Manifest section {section!r}.services must be a list of strings.")
+
+            validated_section["ports"] = list(dict.fromkeys(ports))
+            validated_section["volumes"] = list(dict.fromkeys(volumes))
+            validated_section["services"] = list(dict.fromkeys(services))
+            validated[section] = validated_section
+
+        return validated
+
+    def _resolve_manifest_resources(
+        self,
+        name: str,
+        manifest: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        try:
+            validated_manifest = self._validate_manifest(manifest)
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+        if validated_manifest is None:
+            return {"status": "ok", "assigned": {}}
+
+        requires = validated_manifest["requires"]
+        publishes = validated_manifest["publishes"]
+        requested_ports = list(dict.fromkeys(requires["ports"] + publishes["ports"]))
+        requested_volumes = requires["volumes"]
+        requested_services = requires["services"]
+
+        other_assignments = {
+            plugin_name: assignment
+            for plugin_name, assignment in self._resource_assignments.items()
+            if plugin_name != name
+        }
+        reserved_ports = {
+            port
+            for assignment in other_assignments.values()
+            for port in assignment.get("ports", [])
+            if isinstance(port, int)
+        }
+
+        errors: list[str] = []
+        assigned: dict[str, Any] = {}
+
+        unavailable_ports = [
+            port for port in requested_ports if port not in runtime_config.AVAILABLE_PORTS
+        ]
+        if unavailable_ports:
+            errors.append(
+                f"Requested ports are not available: {sorted(unavailable_ports)}."
+            )
+        busy_ports = [port for port in requested_ports if port in reserved_ports]
+        if busy_ports:
+            errors.append(f"Requested ports are already reserved: {sorted(busy_ports)}.")
+        if requested_ports and not unavailable_ports and not busy_ports:
+            assigned["ports"] = requested_ports
+
+        if requested_volumes:
+            workspace_root = runtime_config.WORKSPACE_PATH.resolve()
+            invalid_volumes: list[str] = []
+            for volume in requested_volumes:
+                volume_path = Path(volume)
+                if not volume_path.is_absolute():
+                    volume_path = workspace_root / volume_path
+                try:
+                    volume_path.resolve().relative_to(workspace_root)
+                except ValueError:
+                    invalid_volumes.append(volume)
+            if invalid_volumes:
+                errors.append(
+                    f"Requested volumes must stay under {runtime_config.WORKSPACE_PATH}: {invalid_volumes}."
+                )
+            else:
+                assigned["volumes"] = requested_volumes
+                assigned["workspace"] = str(runtime_config.WORKSPACE_PATH)
+
+        if requested_services:
+            missing_services = [
+                service for service in requested_services if service not in runtime_config.AVAILABLE_SERVICES
+            ]
+            if missing_services:
+                errors.append(f"Requested services are not available: {sorted(missing_services)}.")
+            else:
+                assigned["services"] = {
+                    service: runtime_config.AVAILABLE_SERVICES[service]
+                    for service in requested_services
+                }
+
+        if errors:
+            return {"error": "Resource request failed.", "details": errors}
+        return {"status": "ok", "assigned": assigned}
+
     def _import_plugin(self, name: str, path: Path) -> None:
         """Import *path* as ``plugins.<name>`` and store in registry.
 
@@ -400,7 +589,7 @@ class PluginManager:
 
         # Call init() only if it accepts no required arguments (i.e. not http).
         init_fn = getattr(module, "init", None)
-        if init_fn is not None and name not in PROTECTED_PLUGINS:
+        if init_fn is not None:
             try:
                 init_fn()
             except TypeError:
@@ -411,12 +600,24 @@ class PluginManager:
         self.plugins[name] = module
         logger.info("Plugin %r loaded from %s", name, path)
 
+    def _get_plugin_env(self, name: str) -> dict[str, str]:
+        env = os.environ.copy()
+        assignments = self._resource_assignments.get(name, {})
+        for port in assignments.get("ports", []):
+            env[f"PORT_{port}"] = str(port)
+        if "workspace" in assignments:
+            env["WORKSPACE_PATH"] = str(runtime_config.WORKSPACE_PATH)
+        for svc_name, uri in assignments.get("services", {}).items():
+            env[f"{svc_name.upper()}_URI"] = uri
+        return env
+
     def _call_inprocess(
         self,
         name: str,
         plugin: ModuleType,
         input_data: dict[str, Any],
         timeout: int,
+        env: dict[str, str],
     ) -> tuple[dict[str, Any], float, bool, str | None, str | None]:
         """Run plugin.run() in a background thread with a timeout.
 
@@ -429,12 +630,18 @@ class PluginManager:
         result_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
 
         def _run() -> None:
+            old_env = os.environ.copy()
             try:
+                os.environ.clear()
+                os.environ.update(env)
                 result_queue.put(("ok", run_fn(input_data)))
             except (SystemExit, KeyboardInterrupt):
                 raise
             except Exception as exc:  # noqa: BLE001
                 result_queue.put(("err", (exc, tb.format_exc())))
+            finally:
+                os.environ.clear()
+                os.environ.update(old_env)
 
         start = time.monotonic()
         thread = threading.Thread(target=_run, daemon=True)
@@ -460,18 +667,25 @@ class PluginManager:
         name: str,
         input_data: dict[str, Any],
         timeout: int,
+        env: dict[str, str],
     ) -> tuple[dict[str, Any], float, bool, str | None, str | None]:
         """Run plugin in an isolated subprocess via core.sandbox_wrapper.
 
         Returns (result, exec_ms, success, error_type, traceback_str).
         """
         if SANDBOX_BACKEND == "docker":
-            docker_result = self._call_docker_subprocess(name, input_data, timeout)
+            docker_result = self._call_docker_subprocess(name, input_data, timeout, env)
             if docker_result is not None:
                 return docker_result
 
         plugin_path = self.plugins_dir / f"{name}.py"
-        payload = json.dumps({"plugin_path": str(plugin_path.resolve()), "input_data": input_data})
+        payload = json.dumps(
+            {
+                "plugin_path": str(plugin_path.resolve()),
+                "input_data": input_data,
+                "env": env,
+            }
+        )
 
         start = time.monotonic()
         try:
@@ -481,6 +695,7 @@ class PluginManager:
                 capture_output=True,
                 text=True,
                 timeout=SANDBOX_TIMEOUT if timeout == 30 else timeout,
+                env=env,
             )
         except subprocess.TimeoutExpired:
             exec_ms = (time.monotonic() - start) * 1000
@@ -506,11 +721,17 @@ class PluginManager:
         name: str,
         input_data: dict[str, Any],
         timeout: int,
+        env: dict[str, str],
     ) -> tuple[dict[str, Any], float, bool, str | None, str | None] | None:
         if self._docker_runner is None:
             self._docker_runner = DockerSandboxRunner(self.plugins_dir)
 
-        result = self._docker_runner.run_plugin(name, input_data, SANDBOX_TIMEOUT if timeout == 30 else timeout)
+        result = self._docker_runner.run_plugin(
+            name,
+            input_data,
+            SANDBOX_TIMEOUT if timeout == 30 else timeout,
+            env,
+        )
         if result[2] is True:
             return result
         if SANDBOX_DOCKER_REQUIRED:

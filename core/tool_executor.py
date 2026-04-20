@@ -19,7 +19,12 @@ class ToolExecutor:
         """Initialise with a PluginManager instance."""
         self._pm = plugin_manager
 
-    def add_plugin(self, name: str, code: str) -> dict[str, Any]:
+    def add_plugin(
+        self,
+        name: str,
+        code: str,
+        manifest: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Write *code* as plugin *name* and hot-reload it.
 
         Checks imports in *code* against ``ALLOWED_REQUIREMENTS``.  If any
@@ -52,7 +57,7 @@ class ToolExecutor:
                 ),
             }
 
-        return self._pm.add_plugin(name, code)
+        return self._pm.add_plugin(name, code, manifest)
 
     def run_plugin(self, name: str, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute plugin *name* with *input_data*.
@@ -74,9 +79,14 @@ class ToolExecutor:
     # Async wrappers
     # ------------------------------------------------------------------
 
-    async def add_plugin_async(self, name: str, code: str) -> dict[str, Any]:
+    async def add_plugin_async(
+        self,
+        name: str,
+        code: str,
+        manifest: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Async wrapper for :meth:`add_plugin`."""
-        return await asyncio.to_thread(self.add_plugin, name, code)
+        return await asyncio.to_thread(self.add_plugin, name, code, manifest)
 
     async def run_plugin_async(
         self, name: str, input_data: dict[str, Any]

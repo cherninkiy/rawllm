@@ -53,6 +53,7 @@ ENV_FILE = Path(".env")
 @click.group()
 def cli() -> None:
     """RawLLM – command-line management tool."""
+    _load_dotenv_if_present()
 
 
 # ---------------------------------------------------------------------------
@@ -62,13 +63,32 @@ def cli() -> None:
 
 @cli.command("run")
 @click.option("--provider", default=None, envvar="LLM_PROVIDER", help="LLM provider to use.")
-def run_cmd(provider: str | None) -> None:
+@click.option("--ports", default=None, help="Available ports as a comma-separated list or ranges.")
+@click.option("--workspace", default=None, type=click.Path(), help="Workspace directory.")
+@click.option("--services", default=None, help="Comma-separated services in name:uri format.")
+@click.option("--prompt", default=None, help="Startup task for the model.")
+def run_cmd(
+    provider: str | None,
+    ports: str | None,
+    workspace: str | None,
+    services: str | None,
+    prompt: str | None,
+) -> None:
     """Start the orchestrator (equivalent to python run.py)."""
     if provider:
         os.environ["LLM_PROVIDER"] = provider
     # Import here to avoid heavy startup cost for other commands.
     from run import main  # type: ignore[import]
-    main()
+    argv: list[str] = []
+    if ports:
+        argv.extend(["--ports", ports])
+    if workspace:
+        argv.extend(["--workspace", workspace])
+    if services:
+        argv.extend(["--services", services])
+    if prompt:
+        argv.extend(["--prompt", prompt])
+    main(argv)
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +142,54 @@ def plugin_add(name: str, code_file: str) -> None:
     pm.load_plugins()
     result = pm.add_plugin(name, code)
     _print_result(result)
+
+
+# ---------------------------------------------------------------------------
+# resources group
+# ---------------------------------------------------------------------------
+
+
+@cli.group("resources")
+def resources_group() -> None:
+    """Inspect plugin resource assignments."""
+
+
+@resources_group.command("list")
+def resources_list() -> None:
+    """Show resource assignments for all plugins."""
+    from core.plugin_manager import PluginManager
+
+    pm = PluginManager(PLUGINS_DIR)
+    assignments = pm.get_resource_assignments()
+    if not assignments:
+        click.echo("No resource assignments found.")
+        return
+    _print_table(
+        headers=["Plugin", "Ports", "Volumes", "Services"],
+        rows=[
+            [
+                name,
+                ", ".join(str(port) for port in assignment.get("ports", [])) or "-",
+                ", ".join(assignment.get("volumes", [])) or "-",
+                ", ".join(sorted(assignment.get("services", {}).keys())) or "-",
+            ]
+            for name, assignment in sorted(assignments.items())
+        ],
+    )
+
+
+@resources_group.command("show")
+@click.argument("name")
+def resources_show(name: str) -> None:
+    """Show the resource assignment for NAME."""
+    from core.plugin_manager import PluginManager
+
+    pm = PluginManager(PLUGINS_DIR)
+    assignment = pm.get_resource_assignment(name)
+    if assignment is None:
+        click.echo(f"No resource assignment found for {name!r}.", err=True)
+        sys.exit(1)
+    click.echo(json.dumps(assignment, indent=2))
 
 
 @plugin_group.command("rollback")
@@ -271,7 +339,9 @@ def config_group() -> None:
 def config_show() -> None:
     """Print all configuration variables."""
     from core.config import (
+        AVAILABLE_PORTS,
         ALLOWED_REQUIREMENTS,
+        AVAILABLE_SERVICES,
         RAWLLM_CORE_USER,
         SANDBOX_BACKEND,
         SANDBOX_CORE_REPO_VOLUME,
@@ -281,6 +351,7 @@ def config_show() -> None:
         SANDBOX_TIMEOUT,
         SANDBOX_WORKSPACE_VOLUME,
         TRUSTED_PLUGINS,
+        WORKSPACE_PATH,
     )
     from core.llm.registry import LLM_PROVIDERS
 
@@ -299,6 +370,9 @@ def config_show() -> None:
     click.echo(f"PLUGIN_STORE_VOLUME  = {SANDBOX_PLUGIN_STORE_VOLUME}")
     click.echo(f"SANDBOX_TIMEOUT      = {SANDBOX_TIMEOUT}s")
     click.echo(f"PLUGINS_DIR          = {PLUGINS_DIR}")
+    click.echo(f"AVAILABLE_PORTS      = {AVAILABLE_PORTS}")
+    click.echo(f"WORKSPACE_PATH       = {WORKSPACE_PATH}")
+    click.echo(f"AVAILABLE_SERVICES   = {AVAILABLE_SERVICES}")
 
 
 @config_group.command("set")

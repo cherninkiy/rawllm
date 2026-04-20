@@ -141,6 +141,51 @@ def test_add_plugin_writes_and_loads(manager: PluginManager, plugins_dir: Path) 
     assert (plugins_dir / "new_plugin.py").exists()
 
 
+def test_add_plugin_assigns_manifest_resources(manager: PluginManager, plugins_dir: Path) -> None:
+    with patch("core.plugin_manager.runtime_config.AVAILABLE_PORTS", [8000, 8080]), patch(
+        "core.plugin_manager.runtime_config.WORKSPACE_PATH",
+        plugins_dir.parent / "workspace",
+    ), patch(
+        "core.plugin_manager.runtime_config.AVAILABLE_SERVICES",
+        {"postgres": "postgresql://db"},
+    ):
+        result = manager.add_plugin(
+            "resourceful",
+            DUMMY_PLUGIN_CODE,
+            {
+                "requires": {
+                    "ports": [8000],
+                    "volumes": ["data"],
+                    "services": ["postgres"],
+                },
+                "publishes": {"ports": [8080]},
+            },
+        )
+
+    assert result["status"] == "ok"
+    assert result["assigned"]["ports"] == [8000, 8080]
+    assert result["assigned"]["volumes"] == ["data"]
+    assert result["assigned"]["services"] == {"postgres": "postgresql://db"}
+
+
+def test_add_plugin_rejects_unavailable_manifest_resources(manager: PluginManager) -> None:
+    with patch("core.plugin_manager.runtime_config.AVAILABLE_PORTS", [8000]), patch(
+        "core.plugin_manager.runtime_config.WORKSPACE_PATH",
+        Path("/workspace"),
+    ), patch(
+        "core.plugin_manager.runtime_config.AVAILABLE_SERVICES",
+        {},
+    ):
+        result = manager.add_plugin(
+            "denied",
+            DUMMY_PLUGIN_CODE,
+            {"requires": {"ports": [9000], "volumes": ["/tmp/outside"], "services": ["postgres"]}},
+        )
+
+    assert result["error"] == "Resource request failed."
+    assert len(result["details"]) == 3
+
+
 def test_add_plugin_overwrites_existing(manager: PluginManager, plugins_dir: Path) -> None:
     from unittest.mock import patch
 
@@ -205,10 +250,11 @@ def test_unload_plugin_calls_shutdown(manager: PluginManager, plugins_dir: Path)
     assert "shutdownable" not in manager.plugins
 
 
-def test_unload_http_is_forbidden(manager: PluginManager) -> None:
+def test_unload_http_is_allowed_when_loaded(manager: PluginManager, plugins_dir: Path) -> None:
+    (plugins_dir / "http.py").write_text(DUMMY_PLUGIN_CODE)
+    manager.load_plugins()
     result = manager.unload_plugin("http")
-    assert "error" in result
-    assert "protected" in result["error"]
+    assert result == {"status": "ok", "plugin": "http"}
 
 
 def test_unload_plugin_not_loaded_returns_error(manager: PluginManager) -> None:
@@ -228,6 +274,26 @@ def test_get_all_plugins_returns_snapshot(manager: PluginManager, plugins_dir: P
     # Mutating snapshot should not affect registry
     del snapshot["snap"]
     assert "snap" in manager.plugins
+
+
+def test_get_plugin_env_uses_assigned_resources(manager: PluginManager, plugins_dir: Path) -> None:
+    with patch("core.plugin_manager.runtime_config.AVAILABLE_PORTS", [8000]), patch(
+        "core.plugin_manager.runtime_config.WORKSPACE_PATH",
+        plugins_dir.parent / "workspace",
+    ), patch(
+        "core.plugin_manager.runtime_config.AVAILABLE_SERVICES",
+        {"postgres": "postgresql://db"},
+    ):
+        manager.add_plugin(
+            "env_plugin",
+            DUMMY_PLUGIN_CODE,
+            {"requires": {"ports": [8000], "volumes": ["data"], "services": ["postgres"]}},
+        )
+
+    env = manager._get_plugin_env("env_plugin")
+    assert env["PORT_8000"] == "8000"
+    assert env["WORKSPACE_PATH"] == str(plugins_dir.parent / "workspace")
+    assert env["POSTGRES_URI"] == "postgresql://db"
 
 
 def test_init_is_called_on_load(manager: PluginManager, plugins_dir: Path) -> None:

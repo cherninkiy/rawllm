@@ -49,6 +49,7 @@ TOOLS: list[dict[str, Any]] = [
                 "Write a Python plugin to disk and hot-reload it. "
                 "The code must define `run(input_data: dict) -> dict`. "
                 "Optionally it may define `init(callback)` and `shutdown()`. "
+                "Optionally include a manifest describing required or published resources. "
                 "If the plugin imports modules outside the default allow-list, list them in "
                 "proposed_requirements; the orchestrator will gate execution until approved."
             ),
@@ -57,6 +58,10 @@ TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "name": {"type": "string", "description": "Plugin name (no .py extension)."},
                     "code": {"type": "string", "description": "Full Python source code of the plugin."},
+                    "manifest": {
+                        "type": "object",
+                        "description": "Optional resource manifest with requires/publishes sections.",
+                    },
                     "proposed_requirements": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -89,7 +94,7 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "unload_plugin",
-            "description": "Gracefully shut down and remove a plugin. Cannot unload 'http'.",
+            "description": "Gracefully shut down and remove a plugin.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -139,6 +144,7 @@ class TAORLoop:
         llm_client: LLMClientProtocol,
         tool_executor: ToolExecutor,
         system_prompt: str,
+        startup_prompt: str,
         max_iterations: int = 10,
     ) -> None:
         """Initialise the loop.
@@ -147,21 +153,27 @@ class TAORLoop:
             llm_client: Any object satisfying :class:`~core.llm.protocol.LLMClientProtocol`.
             tool_executor: Executes tool calls returned by the LLM.
             system_prompt: System prompt injected on every request.
+            startup_prompt: Initial runtime task and resource context message.
             max_iterations: Hard limit on LLM↔tool turns per request.
         """
         self._llm = llm_client
         self._executor = tool_executor
         self._system_prompt = system_prompt
+        self._startup_prompt = startup_prompt
         self._max_iterations = max_iterations
 
     def process_request(
-        self, user_prompt: str, context: dict[str, Any] | None = None
+        self,
+        user_prompt: str | None = None,
+        context: dict[str, Any] | None = None,
     ) -> str:
         """Synchronous wrapper around :meth:`process_request_async` for backward compatibility."""
         return asyncio.run(self.process_request_async(user_prompt, context))
 
     async def process_request_async(
-        self, user_prompt: str, context: dict[str, Any] | None = None
+        self,
+        user_prompt: str | None = None,
+        context: dict[str, Any] | None = None,
     ) -> str:
         """Process a user request through the TAOR cycle and return the final answer.
 
@@ -172,9 +184,11 @@ class TAORLoop:
         Returns:
             The LLM's final text response.
         """
-        user_content = user_prompt
+        user_content = user_prompt or self._startup_prompt
         if context:
-            user_content = f"{user_prompt}\n\nContext:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+            user_content = (
+                f"{user_content}\n\nContext:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+            )
 
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": user_content},
@@ -247,6 +261,7 @@ class TAORLoop:
             return self._executor.add_plugin(
                 name=tool_input["name"],
                 code=tool_input["code"],
+                manifest=tool_input.get("manifest"),
             )
         if tool_name == "run_plugin":
             return self._executor.run_plugin(
@@ -274,6 +289,7 @@ class TAORLoop:
             return await self._executor.add_plugin_async(
                 name=tool_input["name"],
                 code=tool_input["code"],
+                manifest=tool_input.get("manifest"),
             )
         if tool_name == "run_plugin":
             return await self._executor.run_plugin_async(
