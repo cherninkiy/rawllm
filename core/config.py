@@ -4,6 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
+DEFAULT_WORKSPACE_PATH = Path("/workspace")
+
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
@@ -21,21 +23,24 @@ def _parse_ports(raw: str | None) -> list[int]:
         item = chunk.strip()
         if not item:
             continue
-        if "-" in item:
-            start_str, end_str = item.split("-", 1)
-            start = int(start_str)
-            end = int(end_str)
-            if end < start:
-                raise ValueError(f"Invalid port range: {item!r}")
-            ports.extend(range(start, end + 1))
-        else:
-            ports.append(int(item))
+        try:
+            if "-" in item:
+                start_str, end_str = item.split("-", 1)
+                start = int(start_str)
+                end = int(end_str)
+                if end < start:
+                    raise ValueError(f"Invalid port range: {item!r}")
+                ports.extend(range(start, end + 1))
+            else:
+                ports.append(int(item))
+        except ValueError as exc:
+            raise ValueError(f"Invalid port value: {item!r}") from exc
     return list(dict.fromkeys(ports))
 
 
 def _parse_workspace(raw: str | None) -> Path:
     if raw is None or not raw.strip():
-        return Path("/workspace")
+        return DEFAULT_WORKSPACE_PATH
     return Path(raw).expanduser()
 
 
@@ -122,7 +127,7 @@ SANDBOX_DOCKER_REQUIRED: bool = _env_bool("SANDBOX_DOCKER_REQUIRED", True)
 
 # Resource-oriented runtime configuration.
 AVAILABLE_PORTS: list[int] = _parse_ports(os.environ.get("RAWLLM_PORTS"))
-WORKSPACE_PATH: Path = _parse_workspace(os.environ.get("RAWLLM_WORKSPACE", "/workspace"))
+WORKSPACE_PATH: Path = _parse_workspace(os.environ.get("RAWLLM_WORKSPACE", str(DEFAULT_WORKSPACE_PATH)))
 AVAILABLE_SERVICES: dict[str, str] = _parse_services(os.environ.get("RAWLLM_SERVICES"))
 
 # File paths – all configurable via environment variables.

@@ -36,8 +36,6 @@ from core.utils import extract_imports
 
 logger = logging.getLogger(__name__)
 
-PROTECTED_PLUGINS: set[str] = set()
-
 
 def _touch_future(path: Path) -> None:
     """Invalidate Python's .pyc cache for *path* and set mtime into the future.
@@ -198,7 +196,7 @@ class PluginManager:
     def call_plugin(self, name: str, input_data: dict[str, Any], timeout: int = 30) -> dict[str, Any]:
         """Execute ``plugin.run(input_data)`` and return the result.
 
-        Trusted plugins (in TRUSTED_PLUGINS or PROTECTED_PLUGINS) run in-process.
+        Trusted plugins (in TRUSTED_PLUGINS) run in-process.
         All others run in an isolated subprocess via ``core.sandbox_wrapper``.
 
         Returns the result dict, or an error dict (with full traceback) on failure.
@@ -209,7 +207,7 @@ class PluginManager:
                 return {"error": f"Plugin {name!r} is not loaded."}
 
         version_str = self._current_version_str(name)
-        is_trusted = name in TRUSTED_PLUGINS or name in PROTECTED_PLUGINS
+        is_trusted = name in TRUSTED_PLUGINS
         env = self._get_plugin_env(name)
 
         if is_trusted:
@@ -313,9 +311,6 @@ class PluginManager:
 
     def unload_plugin(self, name: str) -> dict[str, Any]:
         """Shut down and remove *name* from the registry (file stays on disk)."""
-        if name in PROTECTED_PLUGINS:
-            return {"error": f"Plugin {name!r} is protected and cannot be unloaded."}
-
         with self._lock:
             plugin = self.get_plugin(name)
             if plugin is None:
@@ -698,7 +693,7 @@ class PluginManager:
                 capture_output=True,
                 text=True,
                 timeout=SANDBOX_TIMEOUT if timeout == 30 else timeout,
-                env=env,
+                env={**os.environ, **env},
             )
         except subprocess.TimeoutExpired:
             exec_ms = (time.monotonic() - start) * 1000

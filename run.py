@@ -92,6 +92,7 @@ def main(argv: list[str] | None = None) -> None:
         print(initial_response)
 
     if not plugin_manager.get_all_plugins():
+        print("No plugins remain loaded after startup; exiting.")
         return
 
     stop_event = threading.Event()
@@ -111,7 +112,7 @@ def main(argv: list[str] | None = None) -> None:
         if shutdown_fn is not None:
             try:
                 shutdown_fn()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 print(f"Warning: plugin {name!r} shutdown() raised: {exc}")
 
 
