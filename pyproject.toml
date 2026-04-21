@@ -7,7 +7,7 @@ requires = ["setuptools>=68,<72", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rawllm"
+name = "rawllm-evo"
 version = "0.2.0"
 description = "RawLLM – minimal orchestrator that exposes the raw power of LLMs"
 readme = "README.md"

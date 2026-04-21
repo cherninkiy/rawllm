@@ -1,5 +1,7 @@
 # RawLLM
 
+[![PyPI](https://img.shields.io/pypi/v/rawllm-evo)](https://pypi.org/project/rawllm-evo/)
+
 Minimal POC of "dumb orchestrator – smart model". The LLM evolves itself by writing plugins (`add_plugin` / `run_plugin`). Inspired by MemPalace (96.6% on LongMemEval) and Claude Code’s TAOR loop. The core is immutable (<150 loc). HTTP transport is a plugin.
 
 ## Idea
