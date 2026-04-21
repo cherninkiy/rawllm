@@ -18,7 +18,13 @@ def mock_llm() -> MagicMock:
 @pytest.fixture()
 def mock_executor() -> MagicMock:
     executor = MagicMock()
-    executor.add_plugin_async = AsyncMock(side_effect=lambda name, code: executor.add_plugin(name=name, code=code))
+    executor.add_plugin_async = AsyncMock(
+        side_effect=lambda name, code, manifest=None: executor.add_plugin(
+            name=name,
+            code=code,
+            manifest=manifest,
+        )
+    )
     executor.run_plugin_async = AsyncMock(side_effect=lambda name, input_data: executor.run_plugin(name=name, input_data=input_data))
     executor.unload_plugin_async = AsyncMock(side_effect=lambda name: executor.unload_plugin(name=name))
     executor.run_plugins_parallel = AsyncMock(side_effect=lambda calls: [executor.run_plugin(name=n, input_data=i) for n, i in calls])
@@ -27,7 +33,13 @@ def mock_executor() -> MagicMock:
 
 @pytest.fixture()
 def loop(mock_llm: MagicMock, mock_executor: MagicMock) -> TAORLoop:
-    return TAORLoop(mock_llm, mock_executor, system_prompt="You are helpful.", max_iterations=5)
+    return TAORLoop(
+        mock_llm,
+        mock_executor,
+        system_prompt="You are helpful.",
+        startup_prompt="Startup task.",
+        max_iterations=5,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +52,31 @@ def test_process_request_returns_text_on_first_response(
     result = loop.process_request("Hi")
     assert result == "Hello, world!"
     assert mock_llm.chat.call_count == 1
+
+
+def test_process_request_defaults_to_startup_prompt(
+    loop: TAORLoop, mock_llm: MagicMock
+) -> None:
+    mock_llm.chat.return_value = {"type": "text", "content": "Booted"}
+
+    result = loop.process_request()
+
+    assert result == "Booted"
+    _, kwargs = mock_llm.chat.call_args
+    messages = kwargs.get("messages") or mock_llm.chat.call_args[0][0]
+    assert messages[0]["content"] == "Startup task."
+
+
+def test_process_request_empty_string_uses_empty_string_not_startup_prompt(
+    loop: TAORLoop, mock_llm: MagicMock
+) -> None:
+    mock_llm.chat.return_value = {"type": "text", "content": "OK"}
+
+    loop.process_request("")
+
+    _, kwargs = mock_llm.chat.call_args
+    messages = kwargs.get("messages") or mock_llm.chat.call_args[0][0]
+    assert messages[0]["content"] == ""
 
 
 def test_process_request_with_context_includes_context(
@@ -116,7 +153,11 @@ def test_process_request_dispatches_add_plugin(
     tool_call = {
         "id": "tc2",
         "name": "add_plugin",
-        "input": {"name": "myplugin", "code": "def run(d): return d"},
+        "input": {
+            "name": "myplugin",
+            "code": "def run(d): return d",
+            "manifest": {"requires": {"ports": [8000]}},
+        },
     }
 
     mock_llm.chat.side_effect = [
@@ -127,7 +168,11 @@ def test_process_request_dispatches_add_plugin(
 
     result = loop.process_request("Add a plugin")
     assert result == "Plugin added"
-    mock_executor.add_plugin.assert_called_once_with(name="myplugin", code="def run(d): return d")
+    mock_executor.add_plugin.assert_called_once_with(
+        name="myplugin",
+        code="def run(d): return d",
+        manifest={"requires": {"ports": [8000]}},
+    )
 
 
 def test_process_request_dispatches_unload_plugin(
@@ -180,8 +225,15 @@ def test_process_request_max_iterations(
 
 def test_dispatch_sync_add_plugin(loop: TAORLoop, mock_executor: MagicMock) -> None:
     mock_executor.add_plugin.return_value = {"status": "ok"}
-    result = loop._dispatch("add_plugin", {"name": "p", "code": "def run(d): return d"})
-    mock_executor.add_plugin.assert_called_once_with(name="p", code="def run(d): return d")
+    result = loop._dispatch(
+        "add_plugin",
+        {"name": "p", "code": "def run(d): return d", "manifest": {"publishes": {"ports": [8080]}}},
+    )
+    mock_executor.add_plugin.assert_called_once_with(
+        name="p",
+        code="def run(d): return d",
+        manifest={"publishes": {"ports": [8080]}},
+    )
     assert result == {"status": "ok"}
 
 
@@ -218,4 +270,3 @@ def test_dispatch_sync_unknown_tool(loop: TAORLoop) -> None:
     result = loop._dispatch("fly_to_moon", {})
     assert "error" in result
     assert "fly_to_moon" in result["error"]
-

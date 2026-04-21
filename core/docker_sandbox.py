@@ -56,6 +56,7 @@ class DockerSandboxRunner:
         name: str,
         input_data: dict[str, Any],
         timeout: int,
+        env: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], float, bool, str | None, str | None]:
         """Run plugin *name* in Docker and return execution tuple."""
         import time
@@ -65,7 +66,9 @@ class DockerSandboxRunner:
             self._prepare_volumes()
 
             plugin_path = f"{SANDBOX_PLUGIN_STORE_MOUNT}/{name}.py"
-            payload = json.dumps({"plugin_path": plugin_path, "input_data": input_data})
+            payload = json.dumps(
+                {"plugin_path": plugin_path, "input_data": input_data, "env": env or {}}
+            )
 
             cmd = [
                 "docker",

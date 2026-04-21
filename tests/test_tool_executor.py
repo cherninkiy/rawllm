@@ -22,8 +22,9 @@ def executor(mock_pm: MagicMock) -> ToolExecutor:
 
 def test_add_plugin_delegates_to_pm(executor: ToolExecutor, mock_pm: MagicMock) -> None:
     mock_pm.add_plugin.return_value = {"status": "ok", "plugin": "myplugin"}
-    result = executor.add_plugin("myplugin", "def run(d): return d")
-    mock_pm.add_plugin.assert_called_once_with("myplugin", "def run(d): return d")
+    manifest = {"requires": {"ports": [8000]}}
+    result = executor.add_plugin("myplugin", "def run(d): return d", manifest)
+    mock_pm.add_plugin.assert_called_once_with("myplugin", "def run(d): return d", manifest)
     assert result == {"status": "ok", "plugin": "myplugin"}
 
 
@@ -107,8 +108,9 @@ def test_append_pending_requirements_logs_on_oserror(tmp_path: Path) -> None:
 
 def test_add_plugin_async(executor: ToolExecutor, mock_pm: MagicMock) -> None:
     mock_pm.add_plugin.return_value = {"status": "ok", "plugin": "ap"}
-    result = asyncio.run(executor.add_plugin_async("ap", "def run(d): return d"))
-    mock_pm.add_plugin.assert_called_once_with("ap", "def run(d): return d")
+    manifest = {"publishes": {"ports": [8080]}}
+    result = asyncio.run(executor.add_plugin_async("ap", "def run(d): return d", manifest))
+    mock_pm.add_plugin.assert_called_once_with("ap", "def run(d): return d", manifest)
     assert result == {"status": "ok", "plugin": "ap"}
 
 

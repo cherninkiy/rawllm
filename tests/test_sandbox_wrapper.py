@@ -7,12 +7,19 @@ import textwrap
 from pathlib import Path
 
 
-def _run_sandbox(plugin_code: str, input_data: dict, tmp_path: Path) -> dict:
+def _run_sandbox(
+    plugin_code: str,
+    input_data: dict,
+    tmp_path: Path,
+    env: dict[str, str] | None = None,
+) -> dict:
     """Helper: write plugin to a temp file and invoke the sandbox wrapper."""
     plugin_path = tmp_path / "test_plugin.py"
     plugin_path.write_text(plugin_code, encoding="utf-8")
 
-    payload = json.dumps({"plugin_path": str(plugin_path), "input_data": input_data})
+    payload = json.dumps(
+        {"plugin_path": str(plugin_path), "input_data": input_data, "env": env or {}}
+    )
     proc = subprocess.run(
         [sys.executable, "-m", "core.sandbox_wrapper"],
         input=payload,
@@ -83,6 +90,24 @@ def test_sandbox_skips_init_with_required_args(tmp_path: Path) -> None:
     )
     result = _run_sandbox(code, {}, tmp_path)
     assert result == {"result": {"ok": True}}
+
+
+def test_sandbox_exposes_env_overrides(tmp_path: Path) -> None:
+    code = textwrap.dedent(
+        """\
+        import os
+
+        def run(input_data):
+            return {"port": os.environ["PORT_8000"], "workspace": os.environ["WORKSPACE_PATH"]}
+        """
+    )
+    result = _run_sandbox(
+        code,
+        {},
+        tmp_path,
+        {"PORT_8000": "8000", "WORKSPACE_PATH": "/workspace"},
+    )
+    assert result == {"result": {"port": "8000", "workspace": "/workspace"}}
 
 
 def test_sandbox_handles_invalid_json_input(tmp_path: Path) -> None:

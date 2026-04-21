@@ -1,78 +1,99 @@
-"""Entry point for RawLLM.
+"""Entry point for RawLLM."""
 
-Selects the LLM backend via the ``LLM_PROVIDER`` environment variable
-(default: ``anthropic``).  All security features (sandboxing, versioning,
-dependency gating, metrics) are included automatically because the same
-:class:`~core.plugin_manager.PluginManager` /
-:class:`~core.tool_executor.ToolExecutor` / :class:`~core.taor_loop.TAORLoop`
-are used regardless of provider.
+from __future__ import annotations
 
-Supported providers
--------------------
-``anthropic``
-    Uses :class:`core.llm.clients.anthropic.AnthropicClient`.
-    Requires ``ANTHROPIC_API_KEY``.
-``groq`` / ``gemini`` / ``openrouter`` / ``ollama``
-    Use :class:`core.llm.clients.openai_compat.OpenAICompatibleClient`.
-    Require the respective API key env var
-    (see :data:`core.llm.registry.LLM_PROVIDERS`).
-
-Environment overrides
----------------------
-``LLM_PROVIDER``
-    Provider to use (default: ``anthropic``).
-``LLM_MODEL``
-    Override the default model for any provider.
-``LLM_BASE_URL``
-    Override the base URL for OpenAI-compatible providers.
-"""
-
+import argparse
+import os
 import signal
 import threading
 
+import core.config as config
 from core.llm import get_llm_client
 from core.plugin_manager import PluginManager
+from core.prompt_builder import build_startup_prompt
 from core.taor_loop import TAORLoop
 from core.tool_executor import ToolExecutor
-from core.config import PLUGINS_DIR as _PLUGINS_DIR_STR, SYSTEM_PROMPT_PATH
 from core.utils import configure_logging, ensure_dir, load_env, read_system_prompt
 
-PLUGINS_DIR = ensure_dir(_PLUGINS_DIR_STR)
+DEFAULT_SYSTEM_PROMPT = (
+    "You are an autonomous AI agent operating inside RawLLM. "
+    "Use add_plugin, run_plugin, and unload_plugin to create the interface needed for this session."
+)
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the RawLLM orchestrator.")
+    parser.add_argument(
+        "--ports",
+        default=os.environ.get("RAWLLM_PORTS", ""),
+        help="Optional available ports as a comma-separated list or ranges (for example 8000-8008).",
+    )
+    parser.add_argument(
+        "--workspace",
+        default=os.environ.get("RAWLLM_WORKSPACE", "./workspace"),
+        help="Workspace directory made available to plugins.",
+    )
+    parser.add_argument(
+        "--services",
+        default=os.environ.get("RAWLLM_SERVICES", ""),
+        help="Comma-separated services in name:uri format.",
+    )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Optional startup task for the model.",
+    )
+    return parser.parse_args(argv)
+
+
+def _load_or_default_system_prompt() -> str:
+    try:
+        return read_system_prompt(config.SYSTEM_PROMPT_PATH)
+    except FileNotFoundError:
+        return DEFAULT_SYSTEM_PROMPT
+
+
+def main(argv: list[str] | None = None) -> None:
     """Bootstrap and run the orchestrator."""
     configure_logging()
     load_env()
+    args = _parse_args(argv)
+
+    ports = config._parse_ports(args.ports)
+    workspace_path = ensure_dir(config._parse_workspace(args.workspace))
+    services = config._parse_services(args.services)
+    config.configure_runtime_resources(
+        ports=ports,
+        workspace_path=workspace_path,
+        services=services,
+    )
 
     llm_client = get_llm_client()
     print(f"Provider: {llm_client.__class__.__name__} | Model: {llm_client.model}")
 
-    system_prompt = read_system_prompt(SYSTEM_PROMPT_PATH)
+    system_prompt = _load_or_default_system_prompt()
+    startup_prompt = build_startup_prompt(
+        {
+            "ports": list(config.AVAILABLE_PORTS),
+            "workspace": config.WORKSPACE_PATH,
+            "services": dict(config.AVAILABLE_SERVICES),
+        },
+        args.prompt,
+    )
 
-    plugin_manager = PluginManager(PLUGINS_DIR)
-    plugin_manager.load_plugins()
-
+    plugins_dir = ensure_dir(config.PLUGINS_DIR)
+    plugin_manager = PluginManager(plugins_dir)
     tool_executor = ToolExecutor(plugin_manager)
-    taor_loop = TAORLoop(llm_client, tool_executor, system_prompt)
+    taor_loop = TAORLoop(llm_client, tool_executor, system_prompt, startup_prompt)
 
-    # Wire up the HTTP plugin callback now that the loop is ready.
-    # NOTE: The HTTP plugin runs a threaded WSGI server.  Each incoming
-    # request is handled in its own thread and calls
-    # ``taor_loop.process_request``, which internally uses
-    # ``asyncio.run(...)`` to create a *new* event loop per thread.
-    # This is safe as long as no caller thread already owns a running
-    # event loop (e.g. when invoked from an async framework such as
-    # FastAPI / asyncio server).  If you integrate RawLLM inside an
-    # existing async context, replace the callback with
-    # ``taor_loop.process_request_async`` and await it properly instead.
-    http_plugin = plugin_manager.get_plugin("http")
-    if http_plugin is not None:
-        init_fn = getattr(http_plugin, "init", None)
-        if init_fn is not None:
-            init_fn(callback=taor_loop.process_request)
+    initial_response = taor_loop.process_request()
+    if initial_response:
+        print(initial_response)
 
-    # Keep the main thread alive until SIGINT / SIGTERM.
+    if not plugin_manager.get_all_plugins():
+        print("No plugins remain loaded after startup; exiting.")
+        return
+
     stop_event = threading.Event()
 
     def _handle_signal(sig: int, _frame: object) -> None:
@@ -85,7 +106,6 @@ def main() -> None:
     print("RawLLM is running. Press Ctrl+C to stop.")
     stop_event.wait()
 
-    # Gracefully shut down all loaded plugins.
     for name, plugin in plugin_manager.get_all_plugins().items():
         shutdown_fn = getattr(plugin, "shutdown", None)
         if shutdown_fn is not None:
