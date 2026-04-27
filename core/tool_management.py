@@ -6,6 +6,7 @@ This module provides:
 """
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
@@ -104,10 +105,9 @@ class ToolReranker:
         self._relevance_weight = relevance_weight
         self._recency_weight = recency_weight
 
-        # History tracking
+        # History tracking using deque for O(1) operations
         self._success_rates: dict[str, float] = {}
-        self._recent_calls: list[str] = []
-        self._max_recent = 100
+        self._recent_calls: deque[str] = deque(maxlen=100)
 
     def update_success_rate(self, tool_name: str, success: bool) -> None:
         """Update the success rate for a tool.
@@ -126,10 +126,11 @@ class ToolReranker:
         self._success_rates[tool_name] = (1 - alpha) * current + alpha * new_value
 
     def record_call(self, tool_name: str) -> None:
-        """Record a tool call for recency tracking."""
+        """Record a tool call for recency tracking.
+        
+        Deque with maxlen automatically handles size limits.
+        """
         self._recent_calls.append(tool_name)
-        if len(self._recent_calls) > self._max_recent:
-            self._recent_calls.pop(0)
 
     def compute_recency_score(self, tool_name: str) -> float:
         """Compute recency score based on recent call frequency.
@@ -229,21 +230,26 @@ class ToolReranker:
     def _compute_relevance(self, tool_name: str, context: dict[str, Any]) -> float:
         """Compute contextual relevance score.
 
-        Simplified implementation - can be enhanced with semantic search.
+        Searches for keywords in both keys and values of the context dictionary.
         """
         # Basic heuristics based on tool name patterns
         tool_lower = tool_name.lower()
 
+        # Convert context to searchable string (keys + values)
+        context_text = " ".join(
+            [str(k).lower() + " " + str(v).lower() for k, v in context.items()]
+        )
+
         # Check if context hints match tool capabilities
-        if "code" in context or "programming" in context:
+        if "code" in context_text or "programming" in context_text:
             if any(kw in tool_lower for kw in ["code", "exec", "run", "python"]):
                 return 0.9
 
-        if "file" in context or "read" in context:
+        if "file" in context_text or "read" in context_text:
             if any(kw in tool_lower for kw in ["read", "load", "file"]):
                 return 0.8
 
-        if "network" in context or "http" in context:
+        if "network" in context_text or "http" in context_text:
             if any(kw in tool_lower for kw in ["http", "request", "fetch"]):
                 return 0.9
 
@@ -273,8 +279,7 @@ class ToolRejectionHandler:
         """
         self._auto_reject = auto_reject_low_confidence
         self._confidence_threshold = confidence_threshold
-        self._recent_calls: list[dict[str, Any]] = []
-        self._max_window = max_duplicate_window
+        self._recent_calls: deque[dict[str, Any]] = deque(maxlen=max_duplicate_window)
 
         # Policy rules (can be extended)
         self._blocked_tools: set[str] = set()
@@ -294,8 +299,11 @@ class ToolRejectionHandler:
         self._parameter_constraints[tool_name] = forbidden_params
 
     def check_duplicate(self, tool_call: dict[str, Any]) -> bool:
-        """Check if this is a duplicate of a recent call."""
-        for recent in self._recent_calls[-self._max_window:]:
+        """Check if this is a duplicate of a recent call.
+        
+        Deque automatically maintains window size via maxlen.
+        """
+        for recent in self._recent_calls:
             if (
                 recent.get("name") == tool_call.get("name")
                 and recent.get("input") == tool_call.get("input")
@@ -376,10 +384,8 @@ class ToolRejectionHandler:
 
         # If no rejection reason, accept the call
         if reason is None:
-            # Record for duplicate tracking
+            # Record for duplicate tracking (deque auto-manages size)
             self._recent_calls.append(tool_call.copy())
-            if len(self._recent_calls) > self._max_window:
-                self._recent_calls.pop(0)
 
             return RejectionResult(rejected=False)
 

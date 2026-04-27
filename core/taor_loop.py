@@ -33,6 +33,7 @@ from typing import Any
 
 from core.llm.protocol import LLMClientProtocol
 from core.tool_executor import ToolExecutor
+from core.tool_management import ToolReranker, ToolRejectionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,10 @@ class TAORLoop:
         self._system_prompt = system_prompt
         self._startup_prompt = startup_prompt
         self._max_iterations = max_iterations
+        
+        # Initialize tool management components (Sprint 1)
+        self._reranker = ToolReranker()
+        self._rejection_handler = ToolRejectionHandler()
 
     def process_request(
         self,
@@ -209,7 +214,61 @@ class TAORLoop:
             # tool_calls branch
             tool_calls = response["tool_calls"]
 
-            # Append the assistant's tool-call turn in OpenAI format.
+            # Sprint 1: Apply reranking and rejection handling before execution
+            context_for_reranking = {"messages": messages, "iteration": iteration}
+            reranked_calls, scores = self._reranker.rerank_tools(
+                tool_calls, context_for_reranking
+            )
+
+            # Filter out rejected calls
+            accepted_calls = []
+            for call, score in zip(reranked_calls, scores):
+                # Convert to dict format expected by rejection handler
+                call_dict = {"name": call["name"], "input": call["input"]}
+                rejection_result = self._rejection_handler.reject_tool_call(
+                    call_dict, confidence=score.confidence
+                )
+                
+                if not rejection_result.rejected:
+                    accepted_calls.append(call)
+                    logger.debug(
+                        "Accepted tool call '%s' with score %.2f",
+                        call["name"],
+                        score.reranked_score,
+                    )
+                else:
+                    logger.warning(
+                        "Rejected tool call '%s': %s",
+                        call["name"],
+                        rejection_result.explanation,
+                    )
+                    # Append rejection as a tool result message for LLM feedback
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call["id"],
+                            "content": json.dumps(
+                                {"error": "Rejected", "reason": rejection_result.explanation},
+                                ensure_ascii=False,
+                            ),
+                        }
+                    )
+
+            if not accepted_calls:
+                # All calls rejected - prompt LLM to reconsider
+                logger.info("All tool calls rejected in iteration %d", iteration + 1)
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "All proposed tool calls were rejected. "
+                            "Please reconsider your approach based on the feedback above."
+                        ),
+                    }
+                )
+                continue
+
+            # Append the assistant's tool-call turn in OpenAI format for accepted calls only
             messages.append(
                 {
                     "role": "assistant",
@@ -223,16 +282,21 @@ class TAORLoop:
                                 "arguments": json.dumps(tc["input"], ensure_ascii=False),
                             },
                         }
-                        for tc in tool_calls
+                        for tc in accepted_calls
                     ],
                 }
             )
 
-            # Execute all tool calls in parallel and append individual tool-result messages.
+            # Execute all accepted tool calls in parallel
             results = await asyncio.gather(
-                *[self._dispatch_async(call["name"], call["input"]) for call in tool_calls]
+                *[self._dispatch_async(call["name"], call["input"]) for call in accepted_calls]
             )
-            for call, result in zip(tool_calls, results):
+            
+            # Update success rates for reranker history
+            for call, result in zip(accepted_calls, results):
+                success = "error" not in result
+                self._reranker.update_success_rate(call["name"], success)
+                
                 messages.append(
                     {
                         "role": "tool",

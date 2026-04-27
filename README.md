@@ -242,7 +242,6 @@ rawllm/
 │   ├── tool_executor.py        # Tool-call routing + dependency gating
 │   ├── taor_loop.py            # Think → Act → Observe → Repeat loop
 │   ├── config.py               # Settings: trusted_plugins, allowed_requirements
-│   ├── taor_loop.py            # Think → Act → Observe → Repeat loop
 │   ├── tool_management.py      # Tool reranking and rejection handling (Sprint 1)
 │   ├── metrics.py              # Event logging with success_score and trajectory tracking
 │   └── utils.py                # Shared utilities + extract_imports
