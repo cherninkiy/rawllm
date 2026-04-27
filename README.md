@@ -20,18 +20,24 @@ The core (orchestrator) is **immutable** and deliberately "dumb" (~150 lines). A
 
 ## Status
 
-✅ **Implemented** — core, HTTP plugin, tests and CI.
+✅ **Core & HTTP Plugin** — implemented, tested, CI passing.  
+✅ **Sprint 1 (Multi-Agent Foundation)** — advanced metrics, tool reranking, and rejection handling completed.  
+⏳ **Sprint 2 (Context & Reflection)** — in progress: context repository and self-correction loop.  
 
 ## Quick start
 
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+# 1. Install dependencies via Poetry or pip
+poetry install
+# or
+pip install -e .
 
 # 2. Create .env with your Anthropic API key
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 
 # 3. Start the orchestrator (HTTP server on port 8080)
+poetry run python run.py
+# or
 python run.py
 
 # 4. Send a request
@@ -193,11 +199,14 @@ rawllm deps reject requests       # reject a module
 ```
 
 ### Metrics & analytics
+
 ```bash
 rawllm metrics show                          # all plugins, table format
 rawllm metrics show --plugin my_plugin       # one plugin
 rawllm metrics show --format json            # JSON output
 rawllm metrics evolution my_plugin           # chronological timeline
+rawllm metrics trajectory <id>               # view specific execution trajectory
+rawllm metrics success-rate                  # aggregate success scores
 ```
 
 ### Configuration
@@ -233,8 +242,9 @@ rawllm/
 │   ├── tool_executor.py        # Tool-call routing + dependency gating
 │   ├── taor_loop.py            # Think → Act → Observe → Repeat loop
 │   ├── config.py               # Settings: trusted_plugins, allowed_requirements
-│   ├── metrics.py              # Event logging to metrics.jsonl
-│   ├── sandbox_wrapper.py      # Isolated subprocess wrapper for untrusted plugins
+│   ├── taor_loop.py            # Think → Act → Observe → Repeat loop
+│   ├── tool_management.py      # Tool reranking and rejection handling (Sprint 1)
+│   ├── metrics.py              # Event logging with success_score and trajectory tracking
 │   └── utils.py                # Shared utilities + extract_imports
 ├── plugins/
 │   └── http.py                 # HTTP transport plugin (port set via HTTP_PORT)
@@ -250,3 +260,4 @@ rawllm/
 
 MIT — use the ideas freely, fork, and improve.
 
+└── HOLOBIONT_ROADMAP.md        # Development roadmap and future phases
