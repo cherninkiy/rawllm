@@ -128,7 +128,7 @@ class ToolReranker:
 
     def record_call(self, tool_name: str) -> None:
         """Record a tool call for recency tracking.
-        
+
         Deque with maxlen automatically handles size limits.
         """
         self._recent_calls.append(tool_name)
@@ -301,7 +301,7 @@ class ToolRejectionHandler:
 
     def check_duplicate(self, tool_call: dict[str, Any]) -> bool:
         """Check if this is a duplicate of a recent call.
-        
+
         Deque automatically maintains window size via maxlen.
         """
         for recent in self._recent_calls:
