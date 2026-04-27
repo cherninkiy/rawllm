@@ -162,7 +162,7 @@ class TAORLoop:
         self._system_prompt = system_prompt
         self._startup_prompt = startup_prompt
         self._max_iterations = max_iterations
-        
+
         # Initialize tool management components (Sprint 1)
         self._reranker = ToolReranker()
         self._rejection_handler = ToolRejectionHandler()
@@ -228,7 +228,7 @@ class TAORLoop:
                 rejection_result = self._rejection_handler.reject_tool_call(
                     call_dict, confidence=score.confidence
                 )
-                
+
                 if not rejection_result.rejected:
                     accepted_calls.append(call)
                     logger.debug(
@@ -291,12 +291,12 @@ class TAORLoop:
             results = await asyncio.gather(
                 *[self._dispatch_async(call["name"], call["input"]) for call in accepted_calls]
             )
-            
+
             # Update success rates for reranker history
             for call, result in zip(accepted_calls, results):
                 success = "error" not in result
                 self._reranker.update_success_rate(call["name"], success)
-                
+
                 messages.append(
                     {
                         "role": "tool",
