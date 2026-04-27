@@ -108,6 +108,7 @@ class ToolReranker:
         # History tracking using deque for O(1) operations
         self._success_rates: dict[str, float] = {}
         self._recent_calls: deque[str] = deque(maxlen=100)
+        self._max_recent = 100
 
     def update_success_rate(self, tool_name: str, success: bool) -> None:
         """Update the success rate for a tool.
