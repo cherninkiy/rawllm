@@ -35,21 +35,43 @@ def log_execution(
     traceback_str: str | None = None,
     import_risk_score: int = 0,
     metrics_file: Path | None = None,
+    success_score: float | None = None,
+    trajectory_id: str | None = None,
+    step_number: int | None = None,
 ) -> None:
-    """Log a single plugin execution."""
-    log_event(
-        "plugin_execution",
-        {
-            "plugin_name": plugin_name,
-            "version": version,
-            "execution_time_ms": execution_time_ms,
-            "success": success,
-            "error_type": error_type,
-            "traceback": traceback_str,
-            "import_risk_score": import_risk_score,
-        },
-        metrics_file=metrics_file,
-    )
+    """Log a single plugin execution.
+
+    Args:
+        plugin_name: Name of the executed plugin.
+        version: Plugin version.
+        execution_time_ms: Execution time in milliseconds.
+        success: Whether execution was successful.
+        error_type: Type of error if failed.
+        traceback_str: Full traceback string if failed.
+        import_risk_score: Risk score from import analysis.
+        success_score: Float score 0.0-1.0 indicating degree of success.
+        trajectory_id: Unique ID for multi-step operation sequence.
+        step_number: Position in the trajectory (1-indexed).
+    """
+    data: dict[str, Any] = {
+        "plugin_name": plugin_name,
+        "version": version,
+        "execution_time_ms": execution_time_ms,
+        "success": success,
+        "error_type": error_type,
+        "traceback": traceback_str,
+        "import_risk_score": import_risk_score,
+    }
+
+    # Add extended tracking fields
+    if success_score is not None:
+        data["success_score"] = max(0.0, min(1.0, success_score))
+    if trajectory_id is not None:
+        data["trajectory_id"] = trajectory_id
+    if step_number is not None:
+        data["step_number"] = step_number
+
+    log_event("plugin_execution", data, metrics_file=metrics_file)
 
 
 def log_version_change(
@@ -148,6 +170,8 @@ def aggregate_by_plugin(
                 "rollbacks": int,
                 "dependency_requests": int,
                 "import_risk_score": int,  # latest recorded score
+                "avg_success_score": float,  # average success_score (0.0-1.0)
+                "trajectory_count": int,     # number of unique trajectories
             }
     """
     events = get_events(plugin_name=plugin_name, metrics_file=metrics_file)
@@ -165,6 +189,9 @@ def aggregate_by_plugin(
             "rollbacks": 0,
             "dependency_requests": 0,
             "import_risk_score": 0,
+            "total_success_score": 0.0,
+            "success_score_count": 0,
+            "trajectories": set(),
         }
 
     for entry in events:
@@ -182,6 +209,16 @@ def aggregate_by_plugin(
                 s["failed"] += 1
             s["total_exec_ms"] += entry.get("execution_time_ms", 0.0)
             s["import_risk_score"] = entry.get("import_risk_score", s["import_risk_score"])
+
+            # Extended success_score tracking
+            if "success_score" in entry:
+                s["total_success_score"] += entry["success_score"]
+                s["success_score_count"] += 1
+
+            # Extended trajectory tracking
+            if "trajectory_id" in entry:
+                s["trajectories"].add(entry["trajectory_id"])
+
         elif etype == "version_change":
             s["version_changes"] += 1
         elif etype == "rollback":
@@ -189,10 +226,23 @@ def aggregate_by_plugin(
         elif etype == "dependency_request":
             s["dependency_requests"] += 1
 
-    # Compute derived fields and remove internal accumulator.
+    # Compute derived fields and remove internal accumulators.
     for s in stats.values():
         total = s["total_executions"]
         s["avg_exec_ms"] = s["total_exec_ms"] / total if total > 0 else 0.0
+
+        # Compute avg_success_score
+        if s["success_score_count"] > 0:
+            s["avg_success_score"] = s["total_success_score"] / s["success_score_count"]
+        else:
+            s["avg_success_score"] = 0.0
+
+        # Count unique trajectories
+        s["trajectory_count"] = len(s["trajectories"])
+
         del s["total_exec_ms"]
+        del s["total_success_score"]
+        del s["success_score_count"]
+        del s["trajectories"]
 
     return stats
