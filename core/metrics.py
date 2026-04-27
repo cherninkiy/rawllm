@@ -40,7 +40,7 @@ def log_execution(
     step_number: int | None = None,
 ) -> None:
     """Log a single plugin execution.
-    
+
     Args:
         plugin_name: Name of the executed plugin.
         version: Plugin version.
@@ -62,7 +62,7 @@ def log_execution(
         "traceback": traceback_str,
         "import_risk_score": import_risk_score,
     }
-    
+
     # Add extended tracking fields
     if success_score is not None:
         data["success_score"] = max(0.0, min(1.0, success_score))
@@ -70,7 +70,7 @@ def log_execution(
         data["trajectory_id"] = trajectory_id
     if step_number is not None:
         data["step_number"] = step_number
-    
+
     log_event("plugin_execution", data, metrics_file=metrics_file)
 
 
@@ -209,16 +209,16 @@ def aggregate_by_plugin(
                 s["failed"] += 1
             s["total_exec_ms"] += entry.get("execution_time_ms", 0.0)
             s["import_risk_score"] = entry.get("import_risk_score", s["import_risk_score"])
-            
+
             # Extended success_score tracking
             if "success_score" in entry:
                 s["total_success_score"] += entry["success_score"]
                 s["success_score_count"] += 1
-            
+
             # Extended trajectory tracking
             if "trajectory_id" in entry:
                 s["trajectories"].add(entry["trajectory_id"])
-                
+
         elif etype == "version_change":
             s["version_changes"] += 1
         elif etype == "rollback":
@@ -230,16 +230,16 @@ def aggregate_by_plugin(
     for s in stats.values():
         total = s["total_executions"]
         s["avg_exec_ms"] = s["total_exec_ms"] / total if total > 0 else 0.0
-        
+
         # Compute avg_success_score
         if s["success_score_count"] > 0:
             s["avg_success_score"] = s["total_success_score"] / s["success_score_count"]
         else:
             s["avg_success_score"] = 0.0
-        
+
         # Count unique trajectories
         s["trajectory_count"] = len(s["trajectories"])
-        
+
         del s["total_exec_ms"]
         del s["total_success_score"]
         del s["success_score_count"]
