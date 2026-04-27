@@ -181,3 +181,100 @@ def test_aggregate_all_plugins(metrics_file: Path) -> None:
     assert "plugin_b" in result
     assert result["plugin_a"]["successful"] == 1
     assert result["plugin_b"]["failed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Extended metrics: success_score and trajectory tracking
+# ---------------------------------------------------------------------------
+
+
+def test_log_execution_with_success_score(metrics_file: Path) -> None:
+    metrics.log_execution(
+        plugin_name="my_plugin",
+        version="v1",
+        execution_time_ms=42.5,
+        success=True,
+        success_score=0.85,
+        metrics_file=metrics_file,
+    )
+    entries = metrics.get_events(metrics_file=metrics_file)
+    assert len(entries) == 1
+    e = entries[0]
+    assert e["success_score"] == 0.85
+
+
+def test_log_execution_with_trajectory(metrics_file: Path) -> None:
+    metrics.log_execution(
+        plugin_name="my_plugin",
+        version="v1",
+        execution_time_ms=42.5,
+        success=True,
+        trajectory_id="traj_123",
+        step_number=2,
+        metrics_file=metrics_file,
+    )
+    entries = metrics.get_events(metrics_file=metrics_file)
+    assert len(entries) == 1
+    e = entries[0]
+    assert e["trajectory_id"] == "traj_123"
+    assert e["step_number"] == 2
+
+
+def test_log_execution_success_score_clamped(metrics_file: Path) -> None:
+    """Test that success_score is clamped to [0.0, 1.0]."""
+    metrics.log_execution(
+        plugin_name="my_plugin",
+        version="v1",
+        execution_time_ms=10.0,
+        success=True,
+        success_score=1.5,  # Should be clamped to 1.0
+        metrics_file=metrics_file,
+    )
+    metrics.log_execution(
+        plugin_name="my_plugin",
+        version="v1",
+        execution_time_ms=10.0,
+        success=True,
+        success_score=-0.3,  # Should be clamped to 0.0
+        metrics_file=metrics_file,
+    )
+    entries = metrics.get_events(metrics_file=metrics_file)
+    assert entries[0]["success_score"] == 1.0
+    assert entries[1]["success_score"] == 0.0
+
+
+def test_aggregate_with_success_score(metrics_file: Path) -> None:
+    metrics.log_execution("calc", "v1", 10.0, True, success_score=0.9, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 20.0, True, success_score=0.7, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 30.0, False, success_score=0.2, metrics_file=metrics_file)
+
+    result = metrics.aggregate_by_plugin("calc", metrics_file=metrics_file)
+    stats = result["calc"]
+    assert "avg_success_score" in stats
+    # (0.9 + 0.7 + 0.2) / 3 = 0.6
+    assert abs(stats["avg_success_score"] - 0.6) < 0.01
+
+
+def test_aggregate_with_trajectories(metrics_file: Path) -> None:
+    metrics.log_execution("calc", "v1", 10.0, True, trajectory_id="traj_1", step_number=1, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 20.0, True, trajectory_id="traj_1", step_number=2, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 30.0, True, trajectory_id="traj_2", step_number=1, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 40.0, True, trajectory_id="traj_2", step_number=2, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 50.0, True, trajectory_id="traj_3", step_number=1, metrics_file=metrics_file)
+
+    result = metrics.aggregate_by_plugin("calc", metrics_file=metrics_file)
+    stats = result["calc"]
+    assert "trajectory_count" in stats
+    assert stats["trajectory_count"] == 3  # traj_1, traj_2, traj_3
+
+
+def test_aggregate_mixed_with_and_without_scores(metrics_file: Path) -> None:
+    """Test aggregation when some events have scores and others don't."""
+    metrics.log_execution("calc", "v1", 10.0, True, success_score=0.8, metrics_file=metrics_file)
+    metrics.log_execution("calc", "v1", 20.0, True, metrics_file=metrics_file)  # No score
+    metrics.log_execution("calc", "v1", 30.0, True, success_score=0.6, metrics_file=metrics_file)
+
+    result = metrics.aggregate_by_plugin("calc", metrics_file=metrics_file)
+    stats = result["calc"]
+    assert stats["total_executions"] == 3
+    assert stats["avg_success_score"] == 0.7  # Only 2 events with scores: (0.8 + 0.6) / 2
