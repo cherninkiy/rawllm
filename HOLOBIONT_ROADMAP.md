@@ -1,30 +1,30 @@
-# 📋 План развития RawLLM → HolobiontLLM
+# 📋 RawLLM to HolobiontLLM Development Roadmap
 
-Этот документ описывает дорожную карту трансформации RawLLM в multi-agent систему с элементами самообучения, соответствующую концепции HolobiontLLM.
+This document describes the roadmap for transforming RawLLM into a multi-agent system with self-learning capabilities, aligned with the HolobiontLLM concept.
 
-## 🎯 Стратегическая цель
+## 🎯 Strategic Goal
 
-Превратить RawLLM из单体ной orchestrator-системы в **эволюционирующую multi-agent экосистему**, где:
-- Агенты формируют динамические коммуникационные графы
-- Система стратегически планирует действия через MCTS
-- Накопленный опыт используется для самообучения (self-play)
+Transform RawLLM from a monolithic orchestrator system into an **evolving multi-agent ecosystem** where:
+- Agents form dynamic communication graphs
+- The system strategically plans actions via MCTS
+- Accumulated experience is used for self-learning (self-play)
 
 ---
 
-## 🧱 Фаза 1: Базовое расширение функциональности
+## 🧱 Phase 1: Core Functionality Extension
 
-**Цель:** Создать фундамент для multi-agent взаимодействий с базовыми интеллектуальными функциями.
+**Goal:** Create a foundation for multi-agent interactions with basic intelligent functions.
 
-### 1.1 Расширенное управление инструментами (Tool Usage)
+### 1.1 Enhanced Tool Usage
 
-#### Задача 1.1.1: Внедрение реранжинга инструментов
-**Файлы:** `core/tool_executor.py`, `core/llm/protocol.py`
-**Описание:**
-- Добавить этап пост-обработки выбранных LLM инструментов
-- Реализовать scoring-механизм для ранжирования инструментов по релевантности
-- Добавить порог уверенности для отсеивания низкоприоритетных вызовов
+#### Task 1.1.1: Tool Reranking Implementation
+**Files:** `core/tool_executor.py`, `core/llm/protocol.py`
+**Description:**
+- Add post-processing stage for LLM-selected tools
+- Implement scoring mechanism for ranking tools by relevance
+- Add confidence threshold for filtering low-priority calls
 
-**API изменения:**
+**API Changes:**
 ```python
 class ToolExecutor:
     def rerank_tools(
@@ -32,24 +32,24 @@ class ToolExecutor:
         tool_calls: List[ToolCall], 
         context: dict
     ) -> List[ToolCall]:
-        """Реранжинг инструментов на основе контекста и истории."""
+        """Rerank tools based on context and history."""
 ```
 
-**Приоритет:** 🔴 Высокий  
-**Сложность:** Средняя  
-**Зависимости:** Нет
-**Статус:** ✅ Выполнено
+**Priority:** 🔴 High  
+**Complexity:** Medium  
+**Dependencies:** None
+**Status:** ✅ Completed
 
 ---
 
-#### Задача 1.1.2: Reject option для инструментов
-**Файлы:** `core/tool_executor.py`, `core/taor_loop.py`
-**Описание:**
-- Дать системе право отказаться от выполнения инструмента
-- Реализовать механизм "мягкого отказа" с объяснением причины
-- Логировать случаи отказа для последующего анализа
+#### Task 1.1.2: Tool Reject Option
+**Files:** `core/tool_executor.py`, `core/taor_loop.py`
+**Description:**
+- Give the system the right to refuse tool execution
+- Implement "soft rejection" mechanism with explanation
+- Log rejection cases for subsequent analysis
 
-**API изменения:**
+**API Changes:**
 ```python
 class ToolExecutor:
     def reject_tool_call(
@@ -57,26 +57,26 @@ class ToolExecutor:
         tool_call: ToolCall, 
         reason: str
     ) -> RejectionResult:
-        """Отказ от выполнения инструмента с обоснованием."""
+        """Reject tool execution with justification."""
 ```
 
-**Приоритет:** 🔴 Высокий  
-**Сложность:** Низкая  
-**Зависимости:** 1.1.1
-**Статус:** ✅ Выполнено
+**Priority:** 🔴 High  
+**Complexity:** Low  
+**Dependencies:** 1.1.1
+**Status:** ✅ Completed
 
 ---
 
-### 1.2 Инструменты саморефлексии и самокоррекции
+### 1.2 Self-Reflection and Self-Correction Tools
 
-#### Задача 1.2.1: Цикл ToolReflection
-**Файлы:** `core/tool_executor.py`, `core/metrics.py`, новое: `core/reflection.py`
-**Описание:**
-- Отслеживание ошибок выполнения инструментов
-- Автоматическая генерация исправленных запросов
-- Обратная связь от API/песочницы для анализа ошибок
+#### Task 1.2.1: ToolReflection Cycle
+**Files:** `core/tool_executor.py`, `core/metrics.py`, new: `core/reflection.py`
+**Description:**
+- Track tool execution errors
+- Automatic generation of corrected requests
+- Feedback from API/sandbox for error analysis
 
-**Компоненты:**
+**Components:**
 ```
 core/reflection.py
 ├── ErrorAnalyzer
@@ -90,23 +90,23 @@ core/reflection.py
     └── log_reflection_event(reflection_data)
 ```
 
-**Приоритет:** 🟡 Средний  
-**Сложность:** Высокая  
-**Зависимости:** 1.1
-**Статус:** ⏳ В работе
+**Priority:** 🟡 Medium  
+**Complexity:** High  
+**Dependencies:** 1.1
+**Status:** ⏳ In Progress
 
 ---
 
-### 1.3 Депозиторий контекстных промптов (Context Prompting)
+### 1.3 Context Prompt Repository
 
-#### Задача 1.3.1: Подсистема ContextPromptRepository
-**Файлы:** новое: `core/context_repository.py`, модификация: `core/prompt_builder.py`
-**Описание:**
-- Хранение шаблонов промптов для различных типов задач
-- Извлечение релевантного контекста по семантическому поиску
-- Интеграция с ProConSuL-подобной логикой
+#### Task 1.3.1: ContextPromptRepository Subsystem
+**Files:** new: `core/context_repository.py`, modification: `core/prompt_builder.py`
+**Description:**
+- Store prompt templates for various task types
+- Extract relevant context via semantic search
+- Integrate with ProConSuL-like logic
 
-**Компоненты:**
+**Components:**
 ```
 core/context_repository.py
 ├── ContextPromptRepository
@@ -123,7 +123,7 @@ core/context_repository.py
     └── similarity_search(query_vector)
 ```
 
-**Интеграция с prompt_builder.py:**
+**Integration with prompt_builder.py:**
 ```python
 def build_startup_prompt(
     available_resources: dict | None = None,
@@ -132,46 +132,46 @@ def build_startup_prompt(
 ) -> str:
 ```
 
-**Приоритет:** 🟡 Средний  
-**Сложность:** Средняя  
-**Зависимости:** Нет
-**Статус:** ⏳ Запланировано
+**Priority:** 🟡 Medium  
+**Complexity:** Medium  
+**Dependencies:** None
+**Status:** ⏳ Planned
 
 ---
 
-### 1.4 Система метрик и оценок
+### 1.4 Metrics and Evaluation System
 
-#### Задача 1.4.1: Расширение журнала событий
-**Файлы:** `core/metrics.py`, `core/tool_executor.py`
-**Описание:**
-- Добавление поля `success_score` (0-1) для каждого события
-- Логирование траекторий выполнения (sequence of tool calls)
-- Оценка успешности multi-step операций
+#### Task 1.4.1: Extended Event Logging
+**Files:** `core/metrics.py`, `core/tool_executor.py`
+**Description:**
+- Add `success_score` field (0-1) for each event
+- Log execution trajectories (sequence of tool calls)
+- Evaluate success of multi-step operations
 
-**API изменения:**
+**API Changes:**
 ```python
 def log_execution(...):
-    # Добавить параметры:
+    # Add parameters:
     success_score: float,  # 0.0 - 1.0
-    trajectory_id: str,    # ID последовательности действий
-    step_number: int,      # Номер шага в траектории
+    trajectory_id: str,    # ID of action sequence
+    step_number: int,      # Step number in trajectory
 ```
 
-**Приоритет:** 🔴 Высокий  
-**Сложность:** Низкая  
-**Зависимости:** Нет
-**Статус:** ✅ Выполнено
+**Priority:** 🔴 High  
+**Complexity:** Low  
+**Dependencies:** None
+**Status:** ✅ Completed
 
 ---
 
-#### Задача 1.4.2: RecVAE для рекомендации агентов
-**Файлы:** новое: `core/agent_recommender.py`, модификация: `core/metrics.py`
-**Описание:**
-- Использование истории успехов для подбора состава комитета агентов
-- Простая VAE-архитектура для кодирования траекторий
-- Рекомендация оптимальных агентов для новых задач
+#### Task 1.4.2: RecVAE for Agent Recommendation
+**Files:** new: `core/agent_recommender.py`, modification: `core/metrics.py`
+**Description:**
+- Use success history to select agent committee composition
+- Simple VAE architecture for encoding trajectories
+- Recommend optimal agents for new tasks
 
-**Компоненты:**
+**Components:**
 ```
 core/agent_recommender.py
 ├── TrajectoryEncoder
@@ -186,27 +186,27 @@ core/agent_recommender.py
     └── optimize_committee_composition(candidate_agents)
 ```
 
-**Приоритет:** 🟢 Низкий (для Фазы 1)  
-**Сложность:** Очень высокая  
-**Зависимости:** 1.4.1
-**Статус:** ⏳ Запланировано
+**Priority:** 🟢 Low (for Phase 1)  
+**Complexity:** Very High  
+**Dependencies:** 1.4.1
+**Status:** ⏳ Planned
 
 ---
 
-## 🌿 Фаза 2: Продвинутые методы (HolobiontLLM)
+## 🌿 Phase 2: Advanced Methods (HolobiontLLM)
 
-**Цель:** Реализация ключевых принципов концепции HolobiontLLM — стратегическое планирование и самообучение.
+**Goal:** Implement key principles of the HolobiontLLM concept — strategic planning and self-learning.
 
-### 2.1 Коммуникационный граф агентов
+### 2.1 Agent Communication Graph
 
-#### Задача 2.1.1: Динамическая система маршрутизации
-**Файлы:** новое: `core/agent_graph.py`, модификация: `core/taor_loop.py`
-**Описание:**
-- Создание динамического графа агентов (Planner, Coder, Critic, Executor)
-- Маршрутизация вызовов на лету в зависимости от задачи
-- Поддержка циклических зависимостей и обратной связи
+#### Task 2.1.1: Dynamic Routing System
+**Files:** new: `core/agent_graph.py`, modification: `core/taor_loop.py`
+**Description:**
+- Create dynamic agent graph (Planner, Coder, Critic, Executor)
+- Route calls on-the-fly depending on task
+- Support cyclic dependencies and feedback loops
 
-**Компоненты:**
+**Components:**
 ```
 core/agent_graph.py
 ├── AgentNode
@@ -226,7 +226,7 @@ core/agent_graph.py
     └── aggregate_results(responses)
 ```
 
-**Интеграция с taor_loop.py:**
+**Integration with taor_loop.py:**
 ```python
 class TAORLoop:
     def __init__(self, ..., agent_graph: CommunicationGraph | None = None):
@@ -239,51 +239,51 @@ class TAORLoop:
             return await self._process_single(...)
 ```
 
-**Приоритет:** 🔴 Высокий (ключевой для Holobiont)  
-**Сложность:** Очень высокая  
-**Зависимости:** Фаза 1 полностью
-**Статус:** ⏳ Запланировано
+**Priority:** 🔴 High (key for Holobiont)  
+**Complexity:** Very High  
+**Dependencies:** Phase 1 complete
+**Status:** ⏳ Planned
 
 ---
 
-#### Задача 2.1.2: Специализированные агенты
-**Файлы:** новое: `core/agents/` пакет
-**Описание:**
-- Planner: декомпозиция сложных задач
-- Coder: генерация и рефакторинг кода
-- Critic: валидация результатов, поиск ошибок
-- Executor: выполнение инструментов
-- Meta-Agent: анализ прошлых ошибок, координация
+#### Task 2.1.2: Specialized Agents
+**Files:** new: `core/agents/` package
+**Description:**
+- Planner: complex task decomposition
+- Coder: code generation and refactoring
+- Critic: result validation, error detection
+- Executor: tool execution
+- Meta-Agent: past error analysis, coordination
 
-**Структура:**
+**Structure:**
 ```
 core/agents/
 ├── __init__.py
-├── base_agent.py       # AbstractAgent基类
+├── base_agent.py       # AbstractAgent base class
 ├── planner.py          # PlannerAgent
 ├── coder.py            # CoderAgent
 ├── critic.py           # CriticAgent
 ├── executor.py         # ExecutorAgent
-└── meta_agent.py       # MetaAgent (координация + обучение)
+└── meta_agent.py       # MetaAgent (coordination + learning)
 ```
 
-**Приоритет:** 🔴 Высокий  
-**Сложность:** Высокая  
-**Зависимости:** 2.1.1
-**Статус:** ⏳ Запланировано
+**Priority:** 🔴 High  
+**Complexity:** High  
+**Dependencies:** 2.1.1
+**Status:** ⏳ Planned
 
 ---
 
-### 2.2 MCTS как планировщик действий
+### 2.2 MCTS as Action Planner
 
-#### Задача 2.2.1: Модуль MCTS
-**Файлы:** новое: `core/mcts_planner.py`
-**Описание:**
-- Monte Carlo Tree Search для стратегического планирования
-- Построение дерева возможных последовательностей агентов
-- Оценка перспективности веток на основе симуляций
+#### Task 2.2.1: MCTS Module
+**Files:** new: `core/mcts_planner.py`
+**Description:**
+- Monte Carlo Tree Search for strategic planning
+- Build tree of possible agent call sequences
+- Evaluate branch promisingness based on simulations
 
-**Компоненты:**
+**Components:**
 ```
 core/mcts_planner.py
 ├── MCTSNode
@@ -303,7 +303,7 @@ core/mcts_planner.py
     └── heuristic_value(partial_trajectory)
 ```
 
-**Алгоритм:**
+**Algorithm:**
 ```python
 def mcts_plan(initial_state, n_iterations=1000):
     root = MCTSNode(initial_state)
@@ -333,23 +333,23 @@ def mcts_plan(initial_state, n_iterations=1000):
     return root.get_best_action()
 ```
 
-**Приоритет:** 🟡 Средний  
-**Сложность:** Очень высокая  
-**Зависимости:** 2.1
-**Статус:** ⏳ Запланировано
+**Priority:** 🟡 Medium  
+**Complexity:** Very High  
+**Dependencies:** 2.1
+**Status:** ⏳ Planned
 
 ---
 
-### 2.3 Цикл обучения (Training Loop)
+### 2.3 Training Loop
 
-#### Задача 2.3.1: Self-play инфраструктура
-**Файлы:** новое: `core/training/` пакет, модификация: `core/mcts_planner.py`
-**Описание:**
-- Генерация тренировочных данных из траекторий MCTS
-- Обновление роутера/Meta-Agent на основе успешных траекторий
-- Итеративное улучшение стратегии выбора агентов
+#### Task 2.3.1: Self-play Infrastructure
+**Files:** new: `core/training/` package, modification: `core/mcts_planner.py`
+**Description:**
+- Generate training data from MCTS trajectories
+- Update router/Meta-Agent based on successful trajectories
+- Iterative improvement of agent selection strategy
 
-**Компоненты:**
+**Components:**
 ```
 core/training/
 ├── __init__.py
@@ -370,136 +370,136 @@ core/training/
         └── train_on_batch(trajectories)
 ```
 
-**Приоритет:** 🟢 Низкий (самый сложный этап)  
-**Сложность:** Экстремальная  
-**Зависимости:** 2.2, вся Фаза 1 и 2
-**Статус:** ⏳ Запланировано
+**Priority:** 🟢 Low (most complex stage)  
+**Complexity:** Extreme  
+**Dependencies:** 2.2, all Phase 1 and 2
+**Status:** ⏳ Planned
 
 ---
 
-## 📊 Сводная таблица приоритетов
+## 📊 Priority Summary Table
 
-| № | Задача | Приоритет | Сложность | Оценка времени |
-|---|--------|-----------|-----------|----------------|
-| 1.1.1 | Реранжинг инструментов | 🔴 Высокий | Средняя | 3-5 дней |
-| 1.1.2 | Reject option | 🔴 Высокий | Низкая | 1-2 дня |
-| 1.2.1 | ToolReflection цикл | 🟡 Средний | Высокая | 7-10 дней |
-| 1.3.1 | Context Repository | 🟡 Средний | Средняя | 4-6 дней |
-| 1.4.1 | Расширение метрик | 🔴 Высокий | Низкая | 2-3 дня |
-| 1.4.2 | RecVAE рекомендатель | 🟢 Низкий | Очень высокая | 14-21 день |
-| 2.1.1 | Agent Graph | 🔴 Высокий | Очень высокая | 10-14 дней |
-| 2.1.2 | Специализированные агенты | 🔴 Высокий | Высокая | 7-10 дней |
-| 2.2.1 | MCTS планировщик | 🟡 Средний | Очень высокая | 14-21 день |
-| 2.3.1 | Training Loop | 🟢 Низкий | Экстремальная | 21-30 дней |
-
----
-
-## 🗺️ Дорожная карта по спринтам
-
-### Спринт 1 (Недели 1-2): Фундамент Фазы 1
-- ✅ 1.1.1 Реранжинг инструментов — **Выполнено**
-- ✅ 1.1.2 Reject option — **Выполнено**
-- ✅ 1.4.1 Расширение метрик — **Выполнено**
-
-**Результат:** Базовая система реранжинга и отказов от инструментов, расширенные метрики с success_score и trajectory_id. Реализовано в `core/tool_management.py` и `core/metrics.py`.
+| # | Task | Priority | Complexity | Time Estimate |
+|---|------|----------|------------|---------------|
+| 1.1.1 | Tool Reranking | 🔴 High | Medium | 3-5 days |
+| 1.1.2 | Reject Option | 🔴 High | Low | 1-2 days |
+| 1.2.1 | ToolReflection Cycle | 🟡 Medium | High | 7-10 days |
+| 1.3.1 | Context Repository | 🟡 Medium | Medium | 4-6 days |
+| 1.4.1 | Extended Metrics | 🔴 High | Low | 2-3 days |
+| 1.4.2 | RecVAE Recommender | 🟢 Low | Very High | 14-21 days |
+| 2.1.1 | Agent Graph | 🔴 High | Very High | 10-14 days |
+| 2.1.2 | Specialized Agents | 🔴 High | High | 7-10 days |
+| 2.2.1 | MCTS Planner | 🟡 Medium | Very High | 14-21 days |
+| 2.3.1 | Training Loop | 🟢 Low | Extreme | 21-30 days |
 
 ---
 
-### Спринт 2 (Недели 3-4): Интеллект Фазы 1
-- ⏳ 1.3.1 Context Repository — **Запланировано**
-- ⏳ 1.2.1 ToolReflection цикл (начало) — **В работе**
+## 🗺️ Sprint Roadmap
 
-**Цель:** Депозиторий контекстных промптов и начало реализации цикла саморефлексии.
+### Sprint 1 (Weeks 1-2): Phase 1 Foundation
+- ✅ 1.1.1 Tool Reranking — **Completed**
+- ✅ 1.1.2 Reject Option — **Completed**
+- ✅ 1.4.1 Extended Metrics — **Completed**
 
----
-
-### Спринт 3 (Недели 5-6): Завершение Фазы 1
-- ⏳ 1.2.1 ToolReflection цикл (завершение) — **Запланировано**
-- ⏳ Начало 2.1.1 Agent Graph (проектирование) — **Запланировано**
-
-**Цель:** Полная реализация ToolReflection и проектирование коммуникационного графа агентов.
+**Deliverable:** Basic tool reranking and rejection system, extended metrics with success_score and trajectory_id. Implemented in `core/tool_management.py` and `core/metrics.py`.
 
 ---
 
-### Спринт 4-5 (Недели 7-10): Ядро Фазы 2
-- ⏳ 2.1.1 Agent Graph (реализация) — **Запланировано**
-- ⏳ 2.1.2 Специализированные агенты — **Запланировано**
+### Sprint 2 (Weeks 3-4): Phase 1 Intelligence
+- ⏳ 1.3.1 Context Repository — **Planned**
+- ⏳ 1.2.1 ToolReflection Cycle (start) — **In Progress**
 
-**Цель:** Динамический граф агентов и специализированные роли (Planner, Coder, Critic, Executor).
-
----
-
-### Спринт 6-8 (Недели 11-16): Планирование и обучение
-- ⏳ 2.2.1 MCTS планировщик — **Запланировано**
-- ⏳ 2.3.1 Training Loop (прототип) — **Запланировано**
-
-**Цель:** MCTS для стратегического планирования и прототип self-play обучения.
+**Goal:** Context prompt repository and beginning of self-reflection cycle implementation.
 
 ---
 
-### Спринт 9+ (Недели 17+): Оптимизация и масштабирование
-- ⏳ 1.4.2 RecVAE (если требуется) — **Запланировано**
-- ⏳ Полировка, тесты, документация — **Запланировано**
+### Sprint 3 (Weeks 5-6): Phase 1 Completion
+- ⏳ 1.2.1 ToolReflection Cycle (completion) — **Planned**
+- ⏳ Start 2.1.1 Agent Graph (design) — **Planned**
+
+**Goal:** Full ToolReflection implementation and agent communication graph design.
 
 ---
 
-## 🔧 Технические требования
+### Sprint 4-5 (Weeks 7-10): Phase 2 Core
+- ⏳ 2.1.1 Agent Graph (implementation) — **Planned**
+- ⏳ 2.1.2 Specialized Agents — **Planned**
 
-### Новые зависимости
+**Goal:** Dynamic agent graph and specialized roles (Planner, Coder, Critic, Executor).
+
+---
+
+### Sprint 6-8 (Weeks 11-16): Planning and Learning
+- ⏳ 2.2.1 MCTS Planner — **Planned**
+- ⏳ 2.3.1 Training Loop (prototype) — **Planned**
+
+**Goal:** MCTS for strategic planning and self-play learning prototype.
+
+---
+
+### Sprint 9+ (Weeks 17+): Optimization and Scaling
+- ⏳ 1.4.2 RecVAE (if required) — **Planned**
+- ⏳ Polishing, testing, documentation — **Planned**
+
+---
+
+## 🔧 Technical Requirements
+
+### New Dependencies
 ```txt
-# Для semantic search в context repository
+# For semantic search in context repository
 sentence-transformers>=2.2.0
 
-# Для VAE в RecVAE
+# For VAE in RecVAE
 torch>=2.0.0
 scikit-learn>=1.0.0
 
-# Для визуализации графов (опционально)
+# For graph visualization (optional)
 networkx>=2.8.0
 pyvis>=0.3.0
 ```
 
-### Требования к тестированию
-- Покрытие тестами ≥80% для всех новых модулей
-- Интеграционные тесты для multi-agent сценариев
-- Нагрузочные тесты для MCTS (проверка времени планирования)
+### Testing Requirements
+- Test coverage ≥80% for all new modules
+- Integration tests for multi-agent scenarios
+- Load tests for MCTS (planning time verification)
 
-### Мониторинг и observability
-- Логирование всех решений MCTS
-- Метрики успешности агентов в реальном времени
-- Визуализация коммуникационного графа
-
----
-
-## 📈 Критерии успеха
-
-### Критерии завершения Фазы 1
-- [x] Все инструменты проходят через реранжинг
-- [x] Система может аргументированно отказаться от инструмента
-- [ ] Cycle ToolReflection работает автоматически при ошибках
-- [ ] Context Repository предоставляет релевантные промпты
-- [x] Метрики включают success_score и trajectory_id
-
-### Критерии завершения Фазы 2
-- [ ] Динамический граф из 3+ агентов собран и выполняет задачу
-- [ ] MCTS находит оптимальную последовательность из 5+ шагов
-- [ ] Self-play улучшает success rate на 20% после 100 эпизодов
-- [ ] Meta-Agent анализирует ошибки и предлагает коррекции
+### Monitoring and Observability
+- Log all MCTS decisions
+- Real-time agent success metrics
+- Communication graph visualization
 
 ---
 
-## ⚠️ Риски и митигация
+## 📈 Success Criteria
 
-| Риск | Вероятность | Влияние | Митигация |
-|------|-------------|---------|-----------|
-| Сложность MCTS превысит оценку | Высокая | Высокое | Начать с упрощённой версии (depth-limited) |
-| Performance degradation | Средняя | Высокое | Кэширование результатов, асинхронность |
-| Overfitting в self-play | Средняя | Среднее | Регуляризация, разнообразие в симуляциях |
-| Сложность отладки графа | Высокая | Среднее | Детальное логирование, визуализация |
+### Phase 1 Completion Criteria
+- [x] All tools go through reranking
+- [x] System can argumentatively reject a tool
+- [ ] ToolReflection cycle works automatically on errors
+- [ ] Context Repository provides relevant prompts
+- [x] Metrics include success_score and trajectory_id
+
+### Phase 2 Completion Criteria
+- [ ] Dynamic graph of 3+ agents assembled and executes task
+- [ ] MCTS finds optimal sequence of 5+ steps
+- [ ] Self-play improves success rate by 20% after 100 episodes
+- [ ] Meta-Agent analyzes errors and suggests corrections
 
 ---
 
-## 📚 Дополнительные материалы
+## ⚠️ Risks and Mitigation
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|---------|------------|
+| MCTS complexity exceeds estimate | High | High | Start with simplified version (depth-limited) |
+| Performance degradation | Medium | High | Result caching, asynchronicity |
+| Overfitting in self-play | Medium | Medium | Regularization, diversity in simulations |
+| Graph debugging complexity | High | Medium | Detailed logging, visualization |
+
+---
+
+## 📚 Additional Materials
 
 - [MemPalace Paper](https://arxiv.org/abs/...) — long-context memory management
 - [Claude Code TAOR](https://claude.ai/code) — reference architecture
@@ -508,6 +508,6 @@ pyvis>=0.3.0
 
 ---
 
-*Документ создан: 2025*  
-*Версия: 1.0*  
-*Статус: Планирование*
+*Document created: 2025*  
+*Version: 1.0*  
+*Status: Planning*
