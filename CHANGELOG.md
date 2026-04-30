@@ -7,6 +7,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Phase 1 intelligence modules** – added `core/context_repository.py` with `ContextPromptRepository`, `PromptTemplate`, and `SemanticIndex`; added `core/reflection.py` with `ErrorAnalyzer`, `CorrectionGenerator`, and `ReflectionLoop`.
+- **Test coverage for new modules** – added `tests/test_context_repository.py` and `tests/test_reflection.py`.
+
+### Changed
+- **Context repository indexing flow** – `store_prompt()` now supports deferred index rebuilds via `rebuild_index=False`, and default template initialization performs a single rebuild after batch insert.
+
+### Fixed
+- **Runtime correction wrapper** – fixed `_wrap_with_error_handling()` indentation in `core/reflection.py` so wrapped code is valid Python under `try`.
+- **Error pattern matching efficiency** – error patterns are normalized once (lowercased) and matched without repeated per-iteration `.lower()` calls.
+- **Timestamp import style** – replaced inline `__import__("datetime")` call with standard module-level `datetime` import.
+- **Lint and ignore file cleanup** – removed markdown fence artifacts from `.gitignore`, removed unused locals/imports, and cleaned trailing-whitespace lines to keep CI (`flake8`) green.
+
+---
+
 ---
 
 ## [0.2.0] – 2026-04-21

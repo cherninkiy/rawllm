@@ -93,7 +93,7 @@ core/reflection.py
 **Priority:** 🟡 Medium  
 **Complexity:** High  
 **Dependencies:** 1.1
-**Status:** ⏳ In Progress
+**Status:** ✅ Completed
 
 ---
 
@@ -135,7 +135,7 @@ def build_startup_prompt(
 **Priority:** 🟡 Medium  
 **Complexity:** Medium  
 **Dependencies:** None
-**Status:** ⏳ Planned
+**Status:** ✅ Completed
 
 ---
 
@@ -485,8 +485,8 @@ pyvis>=0.3.0
 ### Phase 1 Completion Criteria
 - [x] All tools go through reranking
 - [x] System can argumentatively reject a tool
-- [ ] ToolReflection cycle works automatically on errors
-- [ ] Context Repository provides relevant prompts
+- [x] ToolReflection cycle works automatically on errors
+- [x] Context Repository provides relevant prompts
 - [x] Metrics include success_score and trajectory_id
 
 ### Phase 2 Completion Criteria
@@ -518,5 +518,5 @@ pyvis>=0.3.0
 ---
 
 *Document created: 2025*  
-*Version: 1.0*  
-*Status: Planning*
+*Version: 1.1*  
+*Status: Phase 1 in progress (Sprint 2 completed)*
