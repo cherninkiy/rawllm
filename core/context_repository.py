@@ -108,25 +108,25 @@ class SemanticIndex:
 
         for prompt in prompts:
             template_id = prompt.template_id
-            
+
             # Extract keywords from template, description, and tags
             text_content = (
                 f"{prompt.template} {prompt.description} {' '.join(prompt.tags)}"
             ).lower()
-            
+
             # Simple keyword extraction (can be enhanced with TF-IDF or embeddings)
             keywords = self._extract_keywords(text_content)
-            
+
             # Store keyword weights for this template
             self._index[template_id] = {}
             for kw in keywords:
                 self._index[template_id][kw] = self._index[template_id].get(kw, 0) + 1
-                
+
                 # Build reverse index
                 if kw not in self._keyword_index:
                     self._keyword_index[kw] = set()
                 self._keyword_index[kw].add(template_id)
-        
+
         self._built = True
         logger.info("Built semantic index with %d prompts", len(prompts))
 
@@ -150,7 +150,7 @@ class SemanticIndex:
             "because", "until", "while", "although", "though", "this",
             "that", "these", "those", "it", "its"
         }
-        
+
         words = text.split()
         keywords = [
             word.strip(".,!?;:\"'()[]{}")
@@ -178,19 +178,19 @@ class SemanticIndex:
             return []
 
         query_keywords = set(self._extract_keywords(query.lower()))
-        
+
         if not query_keywords:
             return []
 
         # Calculate similarity scores using Jaccard-like metric
         scores: dict[str, float] = {}
-        
+
         for keyword in query_keywords:
             if keyword in self._keyword_index:
                 for template_id in self._keyword_index[keyword]:
                     if template_id not in scores:
                         scores[template_id] = 0.0
-                    
+
                     # Weight by keyword frequency in template
                     keyword_weight = self._index[template_id].get(keyword, 0)
                     scores[template_id] += keyword_weight
@@ -203,7 +203,7 @@ class SemanticIndex:
 
         # Sort by score descending
         sorted_results = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        
+
         return sorted_results[:top_k]
 
 
@@ -285,22 +285,22 @@ class ContextPromptRepository:
         """
         # Use semantic search
         search_results = self._semantic_index.similarity_search(query, top_k=top_k * 2)
-        
+
         results: list[PromptTemplate] = []
-        
+
         for template_id, score in search_results:
             if template_id not in self._templates:
                 continue
-                
+
             template = self._templates[template_id]
-            
+
             # Apply tag filter if specified
             if tags_filter:
                 if not any(tag in template.tags for tag in tags_filter):
                     continue
-            
+
             results.append(template)
-            
+
             if len(results) >= top_k:
                 break
 
@@ -332,11 +332,11 @@ class ContextPromptRepository:
         if context_hints:
             for key, value in context_hints.items():
                 query_parts.append(f"{key}: {value}")
-        
+
         query = " ".join(query_parts)
-        
+
         templates = self.retrieve_prompts(query, top_k=top_k)
-        
+
         context_list = []
         for template in templates:
             context_item = {
@@ -378,13 +378,13 @@ class ContextPromptRepository:
             return
 
         template = self._templates[template_id]
-        
+
         # Exponential moving average
         alpha = 0.1
         current = template.success_rate
         new_value = 1.0 if success else 0.0
         template.success_rate = (1 - alpha) * current + alpha * new_value
-        
+
         logger.debug(
             "Updated success rate for '%s': %.3f",
             template_id,
@@ -402,7 +402,7 @@ class ContextPromptRepository:
         """
         if not tags_filter:
             return list(self._templates.keys())
-        
+
         return [
             tid for tid, template in self._templates.items()
             if any(tag in template.tags for tag in tags_filter)
@@ -435,7 +435,7 @@ class ContextPromptRepository:
             template = PromptTemplate.from_dict(data)
             self._templates[template_id] = template
             count += 1
-        
+
         self._rebuild_index()
         logger.info("Imported %d templates", count)
         return count

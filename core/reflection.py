@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import textwrap
-import traceback
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -238,7 +237,6 @@ class ErrorAnalyzer:
     ) -> str:
         """Generate a hypothesis about the root cause of the error."""
         tool_name = tool_call.get("name", "unknown")
-        tool_input = tool_call.get("input", {})
 
         if category == ErrorCategory.SYNTAX_ERROR:
             return "The code contains syntax errors that prevent parsing."
@@ -366,9 +364,6 @@ class CorrectionGenerator:
             CorrectionResult with corrected call or explanation.
         """
         category = error_analysis.error_category
-        tool_name = original_call.get("name", "")
-        tool_input = original_call.get("input", {})
-
         # Try to generate corrections based on error category
         if category == ErrorCategory.SYNTAX_ERROR:
             return self._handle_syntax_error(original_call, error_analysis)
@@ -470,8 +465,6 @@ class CorrectionGenerator:
         error_analysis: ErrorAnalysis,
     ) -> CorrectionResult:
         """Handle validation errors - adjust input parameters."""
-        tool_input = original_call.get("input", {})
-
         # Generic validation fix suggestions
         return CorrectionResult(
             success=False,
