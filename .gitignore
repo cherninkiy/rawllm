@@ -1,4 +1,3 @@
-```
 # Logs and temporary files
 *.log
 *.tmp
@@ -34,4 +33,3 @@ build/
 
 # Original rule preserved
 *.log
-```

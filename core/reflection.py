@@ -9,7 +9,9 @@ This module provides:
 from __future__ import annotations
 
 import logging
+import textwrap
 import traceback
+from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
@@ -164,6 +166,10 @@ class ErrorAnalyzer:
                 "connection",
             ],
         }
+        self._error_patterns = {
+            category: [pattern.lower() for pattern in patterns]
+            for category, patterns in self._error_patterns.items()
+        }
 
     def analyze_error(
         self,
@@ -196,7 +202,7 @@ class ErrorAnalyzer:
         best_match_count = 0
 
         for err_category, patterns in self._error_patterns.items():
-            match_count = sum(1 for pattern in patterns if pattern.lower() in full_text_lower)
+            match_count = sum(1 for pattern in patterns if pattern in full_text_lower)
             if match_count > best_match_count:
                 best_match_count = match_count
                 category = err_category
@@ -332,7 +338,7 @@ class ErrorAnalyzer:
         full_text = f"{error_type}: {error_message}".lower()
 
         for category, patterns in self._error_patterns.items():
-            if any(pattern.lower() in full_text for pattern in patterns):
+            if any(pattern in full_text for pattern in patterns):
                 return category
 
         return ErrorCategory.UNKNOWN_ERROR
@@ -501,14 +507,16 @@ class CorrectionGenerator:
 
     def _wrap_with_error_handling(self, code: str) -> str:
         """Wrap code in a try-except block for better error handling."""
-        wrapped = f"""try:
-{code}
-except Exception as e:
-    print(f"Error during execution: {{e}}")
-    import traceback
-    traceback.print_exc()
-    raise
-"""
+        indented_code = textwrap.indent(code, "    ")
+        wrapped = (
+            "try:\n"
+            f"{indented_code}\n"
+            "except Exception as e:\n"
+            '    print(f"Error during execution: {e}")\n'
+            "    import traceback\n"
+            "    traceback.print_exc()\n"
+            "    raise\n"
+        )
         return wrapped
 
     def validate_correction(self, proposed_call: dict[str, Any]) -> bool:
@@ -593,7 +601,7 @@ class ReflectionLoop:
             "tool_call": tool_call,
             "error_analysis": error_analysis.to_dict(),
             "correction": correction.to_dict(),
-            "timestamp": __import__("datetime").datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
         }
 
         self._record_reflection(reflection_event)

@@ -228,6 +228,7 @@ class ContextPromptRepository:
         variables: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        rebuild_index: bool = True,
     ) -> PromptTemplate:
         """Store a prompt template in the repository.
 
@@ -238,6 +239,7 @@ class ContextPromptRepository:
             variables: List of variable names used in the template.
             metadata: Additional metadata for the template.
             tags: Tags for categorization and search.
+            rebuild_index: Whether to rebuild the semantic index immediately.
 
         Returns:
             The stored PromptTemplate object.
@@ -259,8 +261,9 @@ class ContextPromptRepository:
         self._templates[template_id] = template
         logger.info("Stored prompt template '%s' with variables: %s", template_id, variables)
 
-        # Rebuild semantic index
-        self._rebuild_index()
+        # Rebuild semantic index unless batching multiple updates.
+        if rebuild_index:
+            self._rebuild_index()
 
         return template
 
@@ -538,7 +541,9 @@ class ContextPromptRepository:
                 description=template_data["description"],
                 tags=template_data["tags"],
                 metadata=template_data.get("metadata", {}),
+                rebuild_index=False,
             )
+        self._rebuild_index()
 
         logger.info("Initialized repository with %d default templates", len(default_templates))
 
