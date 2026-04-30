@@ -93,7 +93,7 @@ core/reflection.py
 **Priority:** 🟡 Medium  
 **Complexity:** High  
 **Dependencies:** 1.1
-**Status:** ⏳ In Progress
+**Status:** ✅ Completed
 
 ---
 
@@ -135,7 +135,7 @@ def build_startup_prompt(
 **Priority:** 🟡 Medium  
 **Complexity:** Medium  
 **Dependencies:** None
-**Status:** ⏳ Planned
+**Status:** ✅ Completed
 
 ---
 
@@ -165,7 +165,7 @@ def log_execution(...):
 ---
 
 #### Task 1.4.2: RecVAE for Agent Recommendation
-**Files:** new: `core/agent_recommender.py`, modification: `core/metrics.py`
+**Files:** new: `core/agents/recommender.py`, modification: `core/metrics.py`
 **Description:**
 - Use success history to select agent committee composition
 - Simple VAE architecture for encoding trajectories
@@ -173,7 +173,7 @@ def log_execution(...):
 
 **Components:**
 ```
-core/agent_recommender.py
+core/agents/recommender.py
 ├── TrajectoryEncoder
 │   ├── encode_trajectory(events_list) -> latent_vector
 │   └── decode_vector(latent_vector) -> trajectory_pattern
@@ -189,7 +189,7 @@ core/agent_recommender.py
 **Priority:** 🟢 Low (for Phase 1)  
 **Complexity:** Very High  
 **Dependencies:** 1.4.1
-**Status:** ⏳ Planned
+**Status:** ✅ Completed (MVP)
 
 ---
 
@@ -406,10 +406,19 @@ core/training/
 ---
 
 ### Sprint 2 (Weeks 3-4): Phase 1 Intelligence
-- ⏳ 1.3.1 Context Repository — **Planned**
-- ⏳ 1.2.1 ToolReflection Cycle (start) — **In Progress**
+- ✅ 1.3.1 Context Repository — **Completed**
+- ✅ 1.2.1 ToolReflection Cycle (start) — **Completed**
 
 **Goal:** Context prompt repository and beginning of self-reflection cycle implementation.
+
+**Deliverables:**
+- `core/context_repository.py`: ContextPromptRepository with semantic search, PromptTemplate, SemanticIndex
+- `core/reflection.py`: ErrorAnalyzer, CorrectionGenerator, ReflectionLoop for automatic error analysis and correction
+- `tests/test_context_repository.py`: 21 tests for context repository functionality
+- `tests/test_reflection.py`: 30 tests for reflection cycle functionality
+- Default templates for code generation, debugging, analysis, documentation, and testing
+- Error categorization for 8 error types (SyntaxError, RuntimeError, TimeoutError, etc.)
+- Automatic correction generation with try-except wrapping for runtime errors
 
 ---
 
@@ -476,8 +485,8 @@ pyvis>=0.3.0
 ### Phase 1 Completion Criteria
 - [x] All tools go through reranking
 - [x] System can argumentatively reject a tool
-- [ ] ToolReflection cycle works automatically on errors
-- [ ] Context Repository provides relevant prompts
+- [x] ToolReflection cycle works automatically on errors
+- [x] Context Repository provides relevant prompts
 - [x] Metrics include success_score and trajectory_id
 
 ### Phase 2 Completion Criteria
@@ -509,5 +518,5 @@ pyvis>=0.3.0
 ---
 
 *Document created: 2025*  
-*Version: 1.0*  
-*Status: Planning*
+*Version: 1.1*  
+*Status: Phase 1 in progress (Sprint 2 completed)*
