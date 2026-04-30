@@ -38,6 +38,7 @@ def log_execution(
     success_score: float | None = None,
     trajectory_id: str | None = None,
     step_number: int | None = None,
+    task_type: str | None = None,
 ) -> None:
     """Log a single plugin execution.
 
@@ -52,6 +53,7 @@ def log_execution(
         success_score: Float score 0.0-1.0 indicating degree of success.
         trajectory_id: Unique ID for multi-step operation sequence.
         step_number: Position in the trajectory (1-indexed).
+        task_type: Optional task category for agent recommendation analytics.
     """
     data: dict[str, Any] = {
         "plugin_name": plugin_name,
@@ -70,6 +72,8 @@ def log_execution(
         data["trajectory_id"] = trajectory_id
     if step_number is not None:
         data["step_number"] = step_number
+    if task_type is not None:
+        data["task_type"] = task_type
 
     log_event("plugin_execution", data, metrics_file=metrics_file)
 
@@ -246,3 +250,41 @@ def aggregate_by_plugin(
         del s["trajectories"]
 
     return stats
+
+
+def get_execution_events(
+    metrics_file: Path | None = None,
+    trajectory_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return plugin execution events, optionally filtered by trajectory."""
+    events = get_events(event_type="plugin_execution", metrics_file=metrics_file)
+    if trajectory_id is None:
+        return events
+    return [event for event in events if event.get("trajectory_id") == trajectory_id]
+
+
+def build_agent_history(
+    metrics_file: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Build normalized training records from execution metrics.
+
+    The returned records are suitable for lightweight recommendation models and
+    include a unified success score in the [0.0, 1.0] range.
+    """
+    history: list[dict[str, Any]] = []
+    for event in get_execution_events(metrics_file=metrics_file):
+        if "success_score" in event:
+            score = float(event["success_score"])
+        else:
+            score = 1.0 if event.get("success") else 0.0
+        history.append(
+            {
+                "agent_id": event.get("plugin_name", "unknown"),
+                "task_type": event.get("task_type", "general"),
+                "success_score": max(0.0, min(1.0, score)),
+                "trajectory_id": event.get("trajectory_id"),
+                "step_number": event.get("step_number"),
+                "execution_time_ms": float(event.get("execution_time_ms", 0.0)),
+            }
+        )
+    return history

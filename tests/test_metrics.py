@@ -278,3 +278,40 @@ def test_aggregate_mixed_with_and_without_scores(metrics_file: Path) -> None:
     stats = result["calc"]
     assert stats["total_executions"] == 3
     assert stats["avg_success_score"] == 0.7  # Only 2 events with scores: (0.8 + 0.6) / 2
+
+
+def test_get_execution_events_filters_by_trajectory(metrics_file: Path) -> None:
+    metrics.log_execution("a", "v1", 1.0, True, trajectory_id="t1", step_number=1, metrics_file=metrics_file)
+    metrics.log_execution("a", "v1", 2.0, True, trajectory_id="t2", step_number=1, metrics_file=metrics_file)
+    events = metrics.get_execution_events(metrics_file=metrics_file, trajectory_id="t1")
+    assert len(events) == 1
+    assert events[0]["trajectory_id"] == "t1"
+
+
+def test_build_agent_history_uses_explicit_and_derived_scores(metrics_file: Path) -> None:
+    metrics.log_execution(
+        plugin_name="agent_planner",
+        version="v1",
+        execution_time_ms=10.0,
+        success=True,
+        task_type="analysis",
+        success_score=0.9,
+        metrics_file=metrics_file,
+    )
+    metrics.log_execution(
+        plugin_name="agent_coder",
+        version="v1",
+        execution_time_ms=20.0,
+        success=False,
+        task_type="python",
+        metrics_file=metrics_file,
+    )
+
+    history = metrics.build_agent_history(metrics_file=metrics_file)
+    assert len(history) == 2
+    assert history[0]["agent_id"] == "agent_planner"
+    assert history[0]["task_type"] == "analysis"
+    assert history[0]["success_score"] == 0.9
+    assert history[1]["agent_id"] == "agent_coder"
+    assert history[1]["task_type"] == "python"
+    assert history[1]["success_score"] == 0.0

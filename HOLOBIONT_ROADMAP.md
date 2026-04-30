@@ -165,7 +165,7 @@ def log_execution(...):
 ---
 
 #### Task 1.4.2: RecVAE for Agent Recommendation
-**Files:** new: `core/agent_recommender.py`, modification: `core/metrics.py`
+**Files:** new: `core/agents/recommender.py`, modification: `core/metrics.py`
 **Description:**
 - Use success history to select agent committee composition
 - Simple VAE architecture for encoding trajectories
@@ -173,7 +173,7 @@ def log_execution(...):
 
 **Components:**
 ```
-core/agent_recommender.py
+core/agents/recommender.py
 ├── TrajectoryEncoder
 │   ├── encode_trajectory(events_list) -> latent_vector
 │   └── decode_vector(latent_vector) -> trajectory_pattern
@@ -189,7 +189,7 @@ core/agent_recommender.py
 **Priority:** 🟢 Low (for Phase 1)  
 **Complexity:** Very High  
 **Dependencies:** 1.4.1
-**Status:** ⏳ Planned
+**Status:** ✅ Completed (MVP)
 
 ---
 

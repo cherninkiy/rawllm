@@ -11,10 +11,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - **Phase 1 intelligence modules** – added `core/context_repository.py` with `ContextPromptRepository`, `PromptTemplate`, and `SemanticIndex`; added `core/reflection.py` with `ErrorAnalyzer`, `CorrectionGenerator`, and `ReflectionLoop`.
+- **Initial agent recommender module** – added `core/agents/recommender.py` with `TrajectoryEncoder`, `AgentRecommender`, and `CommitteeBuilder` to support Phase 1 recommendation workflows.
 - **Test coverage for new modules** – added `tests/test_context_repository.py` and `tests/test_reflection.py`.
 
 ### Changed
 - **Context repository indexing flow** – `store_prompt()` now supports deferred index rebuilds via `rebuild_index=False`, and default template initialization performs a single rebuild after batch insert.
+- **Metrics enrichment for recommendations** – `log_execution()` now supports optional `task_type`, and `core.metrics` includes normalized execution history helpers for recommendation training.
 
 ### Fixed
 - **Runtime correction wrapper** – fixed `_wrap_with_error_handling()` indentation in `core/reflection.py` so wrapped code is valid Python under `try`.
