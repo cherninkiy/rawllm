@@ -259,4 +259,4 @@ rawllm/
 
 MIT — use the ideas freely, fork, and improve.
 
-└── HOLOBIONT_ROADMAP.md        # Development roadmap and future phases
+└── docs/HOLOBIONT_ROADMAP.md   # Development roadmap and future phases
